@@ -15,9 +15,10 @@ const checks = [
   ['title', html.includes('AvatarLink Companion Studio')],
   ['safety_onboarding', source.includes('Safety + asset-rights checklist')],
   ['persona_editor', source.includes('Companion persona editor')],
-  ['vrm_upload', source.includes('VRM upload + preview shell')],
+  ['vrm_upload', source.includes('VRM upload + live preview')],
   ['byok', source.includes('OpenAI-compatible base URL')],
   ['tts_stub', source.includes('TTS adapter stub + mouth movement signal')],
+  ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]
 
