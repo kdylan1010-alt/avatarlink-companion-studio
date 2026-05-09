@@ -20,6 +20,7 @@ const checks = [
   ['tts_stub', source.includes('TTS adapter stub + mouth movement signal')],
   ['mouth_open_mapping', source.includes('Amplitude → mouth-open mapping')],
   ['viseme_timeline', source.includes('Viseme timeline preview')],
+  ['viseme_playback', source.includes('Playback driver status')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { SafetyOnboarding } from './components/SafetyOnboarding'
 import { PersonaEditor } from './components/PersonaEditor'
 import { VrmStudioPanel } from './components/VrmStudioPanel'
@@ -6,6 +6,7 @@ import { ChatWorkbench } from './components/ChatWorkbench'
 import { VoicePanel } from './components/VoicePanel'
 import { amplitudeToMouthOpen, normalizeAmplitude } from './lib/audioAmplitude'
 import { buildVisemeTimeline } from './lib/visemeTimeline'
+import { playVisemeTimeline } from './lib/playVisemeTimeline'
 
 const starterPersona = {
   name: 'Archivist Echo',
@@ -24,7 +25,26 @@ export default function App() {
   const [model, setModel] = useState('gpt-4o-mini')
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
+  const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
+  const cancelPlaybackRef = useRef(() => {})
   const visemeTimeline = useMemo(() => starterTimeline, [])
+
+  useEffect(() => {
+    return () => cancelPlaybackRef.current?.()
+  }, [])
+
+  const handlePlayTimeline = () => {
+    cancelPlaybackRef.current?.()
+    setPlaybackStatus('Playing viseme timeline preview')
+    cancelPlaybackRef.current = playVisemeTimeline(visemeTimeline, (frame) => {
+      setMouthOpen(frame.mouthOpen)
+      setPlaybackStatus(`Playing frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 33)
+    const totalMs = Math.max(33, visemeTimeline.length * 33 + 20)
+    window.setTimeout(() => {
+      setPlaybackStatus('Playback complete — ready to map real TTS frames')
+    }, totalMs)
+  }
 
   const systemPromptPreview = useMemo(() => {
     return `You are ${persona.name}. Tone: ${persona.tone}. Boundaries: ${persona.boundaries}. Opening style: ${persona.opener}`
@@ -67,6 +87,8 @@ export default function App() {
           mouthOpen={mouthOpen}
           onMouthOpenChange={setMouthOpen}
           visemeTimeline={visemeTimeline}
+          playbackStatus={playbackStatus}
+          onPlayTimeline={handlePlayTimeline}
         />
       </section>
     </main>
