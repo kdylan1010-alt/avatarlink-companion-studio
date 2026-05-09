@@ -21,6 +21,7 @@ const checks = [
   ['mouth_open_mapping', source.includes('Amplitude → mouth-open mapping')],
   ['viseme_timeline', source.includes('Viseme timeline preview')],
   ['viseme_playback', source.includes('Playback driver status')],
+  ['audio_frame_analysis', source.includes('Audio frame analysis preview')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]

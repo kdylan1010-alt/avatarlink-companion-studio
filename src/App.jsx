@@ -7,6 +7,7 @@ import { VoicePanel } from './components/VoicePanel'
 import { amplitudeToMouthOpen, normalizeAmplitude } from './lib/audioAmplitude'
 import { buildVisemeTimeline } from './lib/visemeTimeline'
 import { playVisemeTimeline } from './lib/playVisemeTimeline'
+import { analyzeAudioFrames } from './lib/analyzeAudioFrames'
 
 const starterPersona = {
   name: 'Archivist Echo',
@@ -17,6 +18,7 @@ const starterPersona = {
 
 const starterFrames = [0.08, 0.22, 0.14, 0.31, 0.28, 0.12]
 const starterTimeline = buildVisemeTimeline(starterFrames)
+const starterAnalysis = analyzeAudioFrames(starterFrames)
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
@@ -28,6 +30,7 @@ export default function App() {
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
   const cancelPlaybackRef = useRef(() => {})
   const visemeTimeline = useMemo(() => starterTimeline, [])
+  const audioFrameAnalysis = useMemo(() => starterAnalysis, [])
 
   useEffect(() => {
     return () => cancelPlaybackRef.current?.()
@@ -89,6 +92,7 @@ export default function App() {
           visemeTimeline={visemeTimeline}
           playbackStatus={playbackStatus}
           onPlayTimeline={handlePlayTimeline}
+          audioFrameAnalysis={audioFrameAnalysis}
         />
       </section>
     </main>
