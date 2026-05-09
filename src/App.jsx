@@ -10,6 +10,7 @@ import { playVisemeTimeline } from './lib/playVisemeTimeline'
 import { analyzeAudioFrames } from './lib/analyzeAudioFrames'
 import { createTtsFrameBridge } from './lib/ttsFrameBridge'
 import { createLiveTtsIngestState } from './lib/liveTtsIngest'
+import { buildIngestToVisemePipeline } from './lib/ingestToVisemePipeline'
 
 const starterPersona = {
   name: 'Archivist Echo',
@@ -23,6 +24,7 @@ const starterTimeline = buildVisemeTimeline(starterFrames)
 const starterAnalysis = analyzeAudioFrames(starterFrames)
 const starterBridge = createTtsFrameBridge(starterFrames)
 const starterIngest = createLiveTtsIngestState(starterBridge)
+const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge, starterAnalysis)
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
@@ -37,6 +39,7 @@ export default function App() {
   const audioFrameAnalysis = useMemo(() => starterAnalysis, [])
   const ttsFrameBridge = useMemo(() => starterBridge, [])
   const liveTtsIngest = useMemo(() => starterIngest, [])
+  const ingestToVisemePipeline = useMemo(() => starterPipeline, [])
 
   useEffect(() => {
     return () => cancelPlaybackRef.current?.()
@@ -101,6 +104,7 @@ export default function App() {
           audioFrameAnalysis={audioFrameAnalysis}
           ttsFrameBridge={ttsFrameBridge}
           liveTtsIngest={liveTtsIngest}
+          ingestToVisemePipeline={ingestToVisemePipeline}
         />
       </section>
     </main>

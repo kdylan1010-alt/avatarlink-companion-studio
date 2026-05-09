@@ -24,6 +24,7 @@ const checks = [
   ['audio_frame_analysis', source.includes('Audio frame analysis preview')],
   ['tts_frame_bridge', source.includes('TTS frame source bridge')],
   ['live_tts_ingest', source.includes('Live TTS ingest status')],
+  ['ingest_to_viseme_pipeline', source.includes('Ingest-to-viseme pipeline preview')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]
