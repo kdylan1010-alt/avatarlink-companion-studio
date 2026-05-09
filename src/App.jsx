@@ -8,6 +8,7 @@ import { amplitudeToMouthOpen, normalizeAmplitude } from './lib/audioAmplitude'
 import { buildVisemeTimeline } from './lib/visemeTimeline'
 import { playVisemeTimeline } from './lib/playVisemeTimeline'
 import { analyzeAudioFrames } from './lib/analyzeAudioFrames'
+import { createTtsFrameBridge } from './lib/ttsFrameBridge'
 
 const starterPersona = {
   name: 'Archivist Echo',
@@ -19,6 +20,7 @@ const starterPersona = {
 const starterFrames = [0.08, 0.22, 0.14, 0.31, 0.28, 0.12]
 const starterTimeline = buildVisemeTimeline(starterFrames)
 const starterAnalysis = analyzeAudioFrames(starterFrames)
+const starterBridge = createTtsFrameBridge(starterFrames)
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
@@ -31,6 +33,7 @@ export default function App() {
   const cancelPlaybackRef = useRef(() => {})
   const visemeTimeline = useMemo(() => starterTimeline, [])
   const audioFrameAnalysis = useMemo(() => starterAnalysis, [])
+  const ttsFrameBridge = useMemo(() => starterBridge, [])
 
   useEffect(() => {
     return () => cancelPlaybackRef.current?.()
@@ -38,12 +41,12 @@ export default function App() {
 
   const handlePlayTimeline = () => {
     cancelPlaybackRef.current?.()
-    setPlaybackStatus('Playing viseme timeline preview')
+    setPlaybackStatus(`Playing viseme timeline preview from ${ttsFrameBridge.source}`)
     cancelPlaybackRef.current = playVisemeTimeline(visemeTimeline, (frame) => {
       setMouthOpen(frame.mouthOpen)
       setPlaybackStatus(`Playing frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
-    }, 33)
-    const totalMs = Math.max(33, visemeTimeline.length * 33 + 20)
+    }, ttsFrameBridge.frameMs)
+    const totalMs = Math.max(ttsFrameBridge.frameMs, visemeTimeline.length * ttsFrameBridge.frameMs + 20)
     window.setTimeout(() => {
       setPlaybackStatus('Playback complete — ready to map real TTS frames')
     }, totalMs)
@@ -93,6 +96,7 @@ export default function App() {
           playbackStatus={playbackStatus}
           onPlayTimeline={handlePlayTimeline}
           audioFrameAnalysis={audioFrameAnalysis}
+          ttsFrameBridge={ttsFrameBridge}
         />
       </section>
     </main>

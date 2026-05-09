@@ -7,6 +7,7 @@ export function VoicePanel({
   playbackStatus,
   onPlayTimeline,
   audioFrameAnalysis,
+  ttsFrameBridge,
 }) {
   const demoFrames = visemeTimeline.map((frame) => Number(frame.mouthOpen.toFixed(2)))
   const derivedAmplitude = normalizeAmplitude(demoFrames)
@@ -55,6 +56,10 @@ export function VoicePanel({
       <div className="preview-card">
         <p className="mono">Audio frame analysis preview</p>
         <pre>{JSON.stringify(audioFrameAnalysis, null, 2)}</pre>
+      </div>
+      <div className="preview-card">
+        <p className="mono">TTS frame source bridge</p>
+        <pre>{JSON.stringify(ttsFrameBridge, null, 2)}</pre>
       </div>
       <div className="meter-wrap" aria-label="amplitude-preview">
         <div className="meter meter-1"></div>
