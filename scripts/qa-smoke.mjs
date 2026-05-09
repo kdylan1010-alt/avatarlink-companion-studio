@@ -23,6 +23,7 @@ const checks = [
   ['viseme_playback', source.includes('Playback driver status')],
   ['audio_frame_analysis', source.includes('Audio frame analysis preview')],
   ['tts_frame_bridge', source.includes('TTS frame source bridge')],
+  ['live_tts_ingest', source.includes('Live TTS ingest status')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]
