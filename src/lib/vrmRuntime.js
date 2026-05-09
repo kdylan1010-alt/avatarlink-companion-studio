@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm'
+import { VRMLoaderPlugin, VRMUtils, VRMExpressionPresetName } from '@pixiv/three-vrm'
 
 export async function createVrmPreview(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
@@ -25,13 +25,21 @@ export async function createVrmPreview(canvas) {
   scene.add(grid)
 
   let currentVrm = null
+  let currentMouthOpen = 0
   let raf = 0
   const clock = new THREE.Clock()
+
+  const applyMouthOpen = () => {
+    const manager = currentVrm?.expressionManager
+    if (!manager) return
+    manager.setValue(VRMExpressionPresetName.Aa, currentMouthOpen)
+  }
 
   const render = () => {
     raf = requestAnimationFrame(render)
     const delta = clock.getDelta()
     if (currentVrm) {
+      applyMouthOpen()
       currentVrm.update(delta)
       currentVrm.scene.rotation.y += delta * 0.35
     }
@@ -68,6 +76,7 @@ export async function createVrmPreview(canvas) {
         VRMUtils.rotateVRM0(vrm)
         currentVrm = vrm
         currentVrm.scene.position.set(0, -1.15, 0)
+        applyMouthOpen()
         scene.add(currentVrm.scene)
         return {
           avatarName: vrm.meta?.name || file.name,
@@ -76,6 +85,10 @@ export async function createVrmPreview(canvas) {
       } finally {
         URL.revokeObjectURL(url)
       }
+    },
+    setMouthOpen(value) {
+      currentMouthOpen = Math.min(1, Math.max(0, value))
+      applyMouthOpen()
     },
     destroy() {
       cancelAnimationFrame(raf)

@@ -18,6 +18,7 @@ const checks = [
   ['vrm_upload', source.includes('VRM upload + live preview')],
   ['byok', source.includes('OpenAI-compatible base URL')],
   ['tts_stub', source.includes('TTS adapter stub + mouth movement signal')],
+  ['mouth_open_mapping', source.includes('Amplitude → mouth-open mapping')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]

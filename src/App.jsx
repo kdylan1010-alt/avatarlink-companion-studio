@@ -4,6 +4,7 @@ import { PersonaEditor } from './components/PersonaEditor'
 import { VrmStudioPanel } from './components/VrmStudioPanel'
 import { ChatWorkbench } from './components/ChatWorkbench'
 import { VoicePanel } from './components/VoicePanel'
+import { amplitudeToMouthOpen, normalizeAmplitude } from './lib/audioAmplitude'
 
 const starterPersona = {
   name: 'Archivist Echo',
@@ -12,12 +13,15 @@ const starterPersona = {
   opener: 'Welcome back. Want to tune your avatar, test a scene, or rehearse a conversation?',
 }
 
+const starterFrames = [0.08, 0.22, 0.14, 0.31, 0.28, 0.12]
+
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
   const [apiBase, setApiBase] = useState('https://api.openai.com/v1')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('gpt-4o-mini')
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
+  const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
 
   const systemPromptPreview = useMemo(() => {
     return `You are ${persona.name}. Tone: ${persona.tone}. Boundaries: ${persona.boundaries}. Opening style: ${persona.opener}`
@@ -38,7 +42,11 @@ export default function App() {
 
       <section className="grid two-up">
         <PersonaEditor persona={persona} onChange={setPersona} />
-        <VrmStudioPanel uploadedVrmName={uploadedVrmName} onUploadName={setUploadedVrmName} />
+        <VrmStudioPanel
+          uploadedVrmName={uploadedVrmName}
+          onUploadName={setUploadedVrmName}
+          mouthOpen={mouthOpen}
+        />
       </section>
 
       <section className="grid two-up">
@@ -52,7 +60,7 @@ export default function App() {
           onModel={setModel}
           systemPromptPreview={systemPromptPreview}
         />
-        <VoicePanel />
+        <VoicePanel mouthOpen={mouthOpen} onMouthOpenChange={setMouthOpen} />
       </section>
     </main>
   )

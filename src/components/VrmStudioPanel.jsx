@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createVrmPreview } from '../lib/vrmRuntime'
 
-export function VrmStudioPanel({ uploadedVrmName, onUploadName }) {
+export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
   const canvasRef = useRef(null)
   const runtimeRef = useRef(null)
   const [renderStatus, setRenderStatus] = useState('Preview canvas booting…')
@@ -13,6 +13,7 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName }) {
     async function boot() {
       if (!canvasRef.current) return
       runtimeRef.current = await createVrmPreview(canvasRef.current)
+      runtimeRef.current.setMouthOpen(mouthOpen)
       if (mounted) setRenderStatus('Preview canvas live — choose a .vrm file to inspect it in-browser')
     }
 
@@ -26,6 +27,10 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName }) {
       runtimeRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    runtimeRef.current?.setMouthOpen(mouthOpen)
+  }, [mouthOpen])
 
   const handleFile = async (event) => {
     const file = event.target.files?.[0]
@@ -59,6 +64,8 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName }) {
       <div className="preview-card">
         <p className="mono">Loaded asset</p>
         <strong>{uploadedVrmName}</strong>
+        <p className="mono">Mouth-open signal</p>
+        <p>{mouthOpen.toFixed(2)}</p>
         <p className="mono">Render status</p>
         <p>{renderStatus}</p>
         <p className="muted">{meta}</p>

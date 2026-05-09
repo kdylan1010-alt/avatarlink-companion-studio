@@ -1,4 +1,11 @@
-export function VoicePanel() {
+import { amplitudeToMouthOpen, normalizeAmplitude } from '../lib/audioAmplitude'
+
+const demoFrames = [0.08, 0.22, 0.14, 0.31, 0.28, 0.12]
+
+export function VoicePanel({ mouthOpen, onMouthOpenChange }) {
+  const derivedAmplitude = normalizeAmplitude(demoFrames)
+  const suggestedMouthOpen = amplitudeToMouthOpen(derivedAmplitude)
+
   return (
     <section className="panel human-card" data-testid="voice-panel">
       <div className="section-head">
@@ -14,13 +21,29 @@ export function VoicePanel() {
   format: 'wav'
 }`}</pre>
       </div>
+      <div className="preview-card">
+        <p className="mono">Amplitude → mouth-open mapping</p>
+        <p>Demo RMS amplitude: {derivedAmplitude.toFixed(2)}</p>
+        <p>Suggested mouth-open: {suggestedMouthOpen.toFixed(2)}</p>
+        <label>
+          Mouth-open preview
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={mouthOpen}
+            onChange={(event) => onMouthOpenChange(Number(event.target.value))}
+          />
+        </label>
+      </div>
       <div className="meter-wrap" aria-label="amplitude-preview">
         <div className="meter meter-1"></div>
         <div className="meter meter-2"></div>
         <div className="meter meter-3"></div>
         <div className="meter meter-4"></div>
       </div>
-      <p className="muted">Next step: map RMS amplitude to VRM expression / jaw-open blend shapes in the render loop.</p>
+      <p className="muted">Current preview signal is wired into the VRM runtime; next step is real audio-frame analysis from TTS playback.</p>
     </section>
   )
 }
