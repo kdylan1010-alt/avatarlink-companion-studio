@@ -1,8 +1,7 @@
 import { amplitudeToMouthOpen, normalizeAmplitude } from '../lib/audioAmplitude'
 
-const demoFrames = [0.08, 0.22, 0.14, 0.31, 0.28, 0.12]
-
-export function VoicePanel({ mouthOpen, onMouthOpenChange }) {
+export function VoicePanel({ mouthOpen, onMouthOpenChange, visemeTimeline }) {
+  const demoFrames = visemeTimeline.map((frame) => Number(frame.mouthOpen.toFixed(2)))
   const derivedAmplitude = normalizeAmplitude(demoFrames)
   const suggestedMouthOpen = amplitudeToMouthOpen(derivedAmplitude)
 
@@ -36,6 +35,10 @@ export function VoicePanel({ mouthOpen, onMouthOpenChange }) {
             onChange={(event) => onMouthOpenChange(Number(event.target.value))}
           />
         </label>
+      </div>
+      <div className="preview-card">
+        <p className="mono">Viseme timeline preview</p>
+        <pre>{JSON.stringify(visemeTimeline, null, 2)}</pre>
       </div>
       <div className="meter-wrap" aria-label="amplitude-preview">
         <div className="meter meter-1"></div>

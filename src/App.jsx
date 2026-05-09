@@ -5,6 +5,7 @@ import { VrmStudioPanel } from './components/VrmStudioPanel'
 import { ChatWorkbench } from './components/ChatWorkbench'
 import { VoicePanel } from './components/VoicePanel'
 import { amplitudeToMouthOpen, normalizeAmplitude } from './lib/audioAmplitude'
+import { buildVisemeTimeline } from './lib/visemeTimeline'
 
 const starterPersona = {
   name: 'Archivist Echo',
@@ -14,6 +15,7 @@ const starterPersona = {
 }
 
 const starterFrames = [0.08, 0.22, 0.14, 0.31, 0.28, 0.12]
+const starterTimeline = buildVisemeTimeline(starterFrames)
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
@@ -22,6 +24,7 @@ export default function App() {
   const [model, setModel] = useState('gpt-4o-mini')
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
+  const visemeTimeline = useMemo(() => starterTimeline, [])
 
   const systemPromptPreview = useMemo(() => {
     return `You are ${persona.name}. Tone: ${persona.tone}. Boundaries: ${persona.boundaries}. Opening style: ${persona.opener}`
@@ -60,7 +63,11 @@ export default function App() {
           onModel={setModel}
           systemPromptPreview={systemPromptPreview}
         />
-        <VoicePanel mouthOpen={mouthOpen} onMouthOpenChange={setMouthOpen} />
+        <VoicePanel
+          mouthOpen={mouthOpen}
+          onMouthOpenChange={setMouthOpen}
+          visemeTimeline={visemeTimeline}
+        />
       </section>
     </main>
   )
