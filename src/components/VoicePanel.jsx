@@ -10,6 +10,7 @@ export function VoicePanel({
   ttsFrameBridge,
   liveTtsIngest,
   ingestToVisemePipeline,
+  providerTtsContract,
 }) {
   const demoFrames = visemeTimeline.map((frame) => Number(frame.mouthOpen.toFixed(2)))
   const derivedAmplitude = normalizeAmplitude(demoFrames)
@@ -70,6 +71,10 @@ export function VoicePanel({
       <div className="preview-card">
         <p className="mono">Ingest-to-viseme pipeline preview</p>
         <pre>{JSON.stringify(ingestToVisemePipeline, null, 2)}</pre>
+      </div>
+      <div className="preview-card">
+        <p className="mono">Provider TTS contract preview</p>
+        <pre>{JSON.stringify(providerTtsContract, null, 2)}</pre>
       </div>
       <div className="meter-wrap" aria-label="amplitude-preview">
         <div className="meter meter-1"></div>

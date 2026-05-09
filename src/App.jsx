@@ -11,6 +11,7 @@ import { analyzeAudioFrames } from './lib/analyzeAudioFrames'
 import { createTtsFrameBridge } from './lib/ttsFrameBridge'
 import { createLiveTtsIngestState } from './lib/liveTtsIngest'
 import { buildIngestToVisemePipeline } from './lib/ingestToVisemePipeline'
+import { buildProviderTtsContract } from './lib/providerTtsContract'
 
 const starterPersona = {
   name: 'Archivist Echo',
@@ -25,6 +26,7 @@ const starterAnalysis = analyzeAudioFrames(starterFrames)
 const starterBridge = createTtsFrameBridge(starterFrames)
 const starterIngest = createLiveTtsIngestState(starterBridge)
 const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge, starterAnalysis)
+const starterContract = buildProviderTtsContract({})
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
@@ -40,6 +42,7 @@ export default function App() {
   const ttsFrameBridge = useMemo(() => starterBridge, [])
   const liveTtsIngest = useMemo(() => starterIngest, [])
   const ingestToVisemePipeline = useMemo(() => starterPipeline, [])
+  const providerTtsContract = useMemo(() => starterContract, [])
 
   useEffect(() => {
     return () => cancelPlaybackRef.current?.()
@@ -105,6 +108,7 @@ export default function App() {
           ttsFrameBridge={ttsFrameBridge}
           liveTtsIngest={liveTtsIngest}
           ingestToVisemePipeline={ingestToVisemePipeline}
+          providerTtsContract={providerTtsContract}
         />
       </section>
     </main>
