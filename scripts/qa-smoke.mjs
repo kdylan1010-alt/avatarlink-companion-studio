@@ -1,16 +1,23 @@
 import fs from 'node:fs'
 
 const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8')
-const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+const source = [
+  '../src/App.jsx',
+  '../src/components/SafetyOnboarding.jsx',
+  '../src/components/PersonaEditor.jsx',
+  '../src/components/VrmStudioPanel.jsx',
+  '../src/components/ChatWorkbench.jsx',
+  '../src/components/VoicePanel.jsx',
+].map((path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 const css = fs.readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8')
 
 const checks = [
   ['title', html.includes('AvatarLink Companion Studio')],
-  ['safety_onboarding', app.includes('Safety + asset-rights checklist')],
-  ['persona_editor', app.includes('Companion persona editor')],
-  ['vrm_upload', app.includes('VRM upload + preview shell')],
-  ['byok', app.includes('OpenAI-compatible base URL')],
-  ['tts_stub', app.includes('TTS adapter stub + mouth movement signal')],
+  ['safety_onboarding', source.includes('Safety + asset-rights checklist')],
+  ['persona_editor', source.includes('Companion persona editor')],
+  ['vrm_upload', source.includes('VRM upload + preview shell')],
+  ['byok', source.includes('OpenAI-compatible base URL')],
+  ['tts_stub', source.includes('TTS adapter stub + mouth movement signal')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]
 
