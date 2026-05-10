@@ -24,3 +24,8 @@
   - `voiceKey: voiceId`
 - Remaining blocker is not VRM loading; it is lack of persisted lead capture backend and missing browser-proof for manual user-upload flow.
 
+## 2026-05-10 14:55 CST — upload-path artifact started
+- Added a visible `Run simulated upload proof` button in `src/components/VrmStudioPanel.jsx`.
+- Purpose: exercise the exact `loadFile(file)` path using a browser-created `File` from `/avatars/sample.vrm`, even when direct browser automation cannot attach a desktop file.
+- Expected proof target on success: render status `VRM preview rendered in-browser via simulated upload` and console log `VRM file load succeeded`.
+

@@ -32,6 +32,7 @@ const checks = [
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],
   ['lead_dashboard', source.includes('Recent pilot leads')],
   ['default_sample_vrm', source.includes('/avatars/sample.vrm')],
+  ['simulated_upload_proof', source.includes('Run simulated upload proof') && source.includes('simulated upload')],
   ['vrm_smoke_test', source.includes('Standalone default avatar loader')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],

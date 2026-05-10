@@ -41,20 +41,41 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
     runtimeRef.current?.setMouthOpen(mouthOpen)
   }, [mouthOpen])
 
-  const handleFile = async (event) => {
-    const file = event.target.files?.[0]
+  const loadFromFile = async (file, sourceLabel = 'upload') => {
     if (!file) return
     onUploadName(file.name)
-    setRenderStatus(`Loading ${file.name}…`)
+    setRenderStatus(`Loading ${file.name} via ${sourceLabel}…`)
 
     try {
       const result = await runtimeRef.current?.loadFile(file)
       setMeta(`${result?.avatarName || file.name} • VRM ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
-      setRenderStatus('VRM preview rendered in-browser')
+      setRenderStatus(`VRM preview rendered in-browser via ${sourceLabel}`)
+      console.log('VRM file load succeeded', { sourceLabel, fileName: file.name, ...result })
     } catch (error) {
       console.error('Uploaded VRM failed', error)
       setMeta('VRM metadata unavailable')
-      setRenderStatus(`VRM load failed: ${error.message}`)
+      setRenderStatus(`VRM load failed via ${sourceLabel}: ${error.message}`)
+    }
+  }
+
+  const handleFile = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    await loadFromFile(file, 'manual upload')
+  }
+
+  const handleSimulatedUpload = async () => {
+    setRenderStatus('Fetching sample.vrm for upload-path proof…')
+    try {
+      const response = await fetch(SAMPLE_PATH)
+      if (!response.ok) throw new Error(`Sample fetch failed with ${response.status}`)
+      const blob = await response.blob()
+      const file = new File([blob], 'sample-upload.vrm', { type: blob.type || 'application/octet-stream' })
+      await loadFromFile(file, 'simulated upload')
+    } catch (error) {
+      console.error('Simulated upload failed', error)
+      setMeta('VRM metadata unavailable')
+      setRenderStatus(`Simulated upload failed: ${error.message}`)
     }
   }
 
@@ -68,6 +89,7 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
         <span>Drop a .vrm file or choose one manually</span>
         <input type="file" accept=".vrm" onChange={handleFile} />
       </label>
+      <button className="primary-button" type="button" onClick={handleSimulatedUpload}>Run simulated upload proof</button>
       <div className="preview-stage">
         <canvas ref={canvasRef} className="preview-canvas" aria-label="VRM preview canvas" />
       </div>
