@@ -31,6 +31,7 @@ const checks = [
   ['provider_response_map', source.includes('Provider response mapping preview')],
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],
   ['lead_dashboard', source.includes('Recent pilot leads')],
+  ['lead_persistence', source.includes('localStorage') && source.includes('Export leads CSV')],
   ['default_sample_vrm', source.includes('/avatars/sample.vrm')],
   ['simulated_upload_proof', source.includes('Run simulated upload proof') && source.includes('simulated upload')],
   ['vrm_smoke_test', source.includes('Standalone default avatar loader')],

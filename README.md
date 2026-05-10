@@ -10,6 +10,7 @@ Browser-native no-code **VRM/VTuber AI avatar companion engine** MVP.
 ## MVP scope
 - VRM upload + preview panel
 - Chat UI shell
+- Lead capture persisted in browser localStorage + CSV export
 - OpenAI-compatible BYOK configuration form (local/browser only)
 - TTS adapter stub
 - Web Audio amplitude -> mouth movement stub

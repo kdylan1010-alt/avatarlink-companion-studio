@@ -58,3 +58,8 @@
 - Purpose: exercise the exact `loadFile(file)` path using a browser-created `File` from `/avatars/sample.vrm`, even when direct browser automation cannot attach a desktop file.
 - Expected proof target on success: render status `VRM preview rendered in-browser via simulated upload` and console log `VRM file load succeeded`.
 
+
+## 2026-05-10 15:18 CST — money-build lead persistence artifact
+- Added `Export leads CSV` button and browser `localStorage` persistence in `src/components/LeadCapturePanel.jsx`.
+- New smoke proof target: `PASS lead_persistence`.
+- Revenue artifact is now more concrete than React-only state: saved leads survive reload in-browser and can be exported as `avatarlink-pilot-leads.csv`.

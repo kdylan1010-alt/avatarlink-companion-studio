@@ -20,3 +20,5 @@ node scripts/qa-smoke.mjs
 1. Verify `/avatars/sample.vrm` returns HTTP 200 with nonzero bytes
 2. Load `VrmSmokeTest` and confirm browser console logs `VRM loaded`
 3. Confirm default sample renders before testing user upload
+
+4. Confirm lead persistence + CSV export controls render and smoke passes
