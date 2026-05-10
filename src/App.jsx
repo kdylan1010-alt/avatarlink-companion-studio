@@ -3,6 +3,7 @@ import { SafetyOnboarding } from './components/SafetyOnboarding'
 import { PersonaEditor } from './components/PersonaEditor'
 import { VrmStudioPanel } from './components/VrmStudioPanel'
 import { ChatWorkbench } from './components/ChatWorkbench'
+import { LeadCapturePanel } from './components/LeadCapturePanel'
 import { VoicePanel } from './components/VoicePanel'
 import { amplitudeToMouthOpen, normalizeAmplitude } from './lib/audioAmplitude'
 import { buildVisemeTimeline } from './lib/visemeTimeline'
@@ -77,6 +78,8 @@ export default function App() {
       </header>
 
       <SafetyOnboarding />
+
+      <LeadCapturePanel />
 
       <section className="grid two-up">
         <PersonaEditor persona={persona} onChange={setPersona} />
