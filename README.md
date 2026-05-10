@@ -52,3 +52,8 @@ node scripts/qa-smoke.mjs
 - Live local demo: `http://127.0.0.1:4173/`
 - Status ledger: `docs/STATUS.md`
 - Team inbox + blocker routing: `docs/DELIVERY_AND_INBOX.md`
+
+## Safe model provider path
+- Safe provider guidance: `docs/MODEL_PROVIDERS.md`
+- ChatGPT Free/Plus/Pro login is not the same as OpenAI API access
+- Use official API key/provider key only

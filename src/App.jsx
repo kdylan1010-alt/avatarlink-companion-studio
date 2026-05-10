@@ -16,6 +16,49 @@ import { buildIngestToVisemePipeline } from './lib/ingestToVisemePipeline'
 import { buildProviderTtsContract } from './lib/providerTtsContract'
 import { buildProviderResponseMap } from './lib/providerResponseMap'
 
+const PROVIDER_PRESETS = {
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter (OpenAI-compatible, supports :free models)',
+    apiBase: 'https://openrouter.ai/api/v1',
+    model: 'openrouter/auto',
+    transport: 'openai-compatible',
+    authNote: 'Use an official OpenRouter API key. For low-cost testing, choose a current :free model from the OpenRouter catalog.',
+  },
+  gemini: {
+    id: 'gemini',
+    label: 'Gemini API key (free-tier friendly scaffold)',
+    apiBase: 'https://generativelanguage.googleapis.com/v1beta',
+    model: 'gemini-2.5-flash',
+    transport: 'openai-compatible',
+    authNote: 'Use a Gemini API key from Google AI Studio. This app keeps the same BYOK surface and sends OpenAI-style chat requests to the Gemini compatibility endpoint.',
+  },
+  ollama: {
+    id: 'ollama',
+    label: 'Local Ollama (dev/local)',
+    apiBase: 'http://localhost:11434/v1',
+    model: 'llama3.2',
+    transport: 'openai-compatible',
+    authNote: 'Local dev path. No cloud secret is required if your local Ollama server is already running.',
+  },
+  openai: {
+    id: 'openai',
+    label: 'Official OpenAI API key / project',
+    apiBase: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    transport: 'openai-compatible',
+    authNote: 'Official API access only. ChatGPT Free/Plus/Pro login is not the same as OpenAI API access.',
+  },
+  oauthReady: {
+    id: 'oauthReady',
+    label: 'OAuth-ready provider connector',
+    apiBase: 'https://official-provider-oauth.example/v1',
+    model: 'provider-oauth-placeholder-model',
+    transport: 'mock-oauth',
+    authNote: 'Mocked until an official provider OAuth path is confirmed. No cookies, no web-session scraping, no secrets stored in the frontend.',
+  },
+}
+
 const starterPersona = {
   name: 'Archivist Echo',
   tone: 'Warm, curious, and lightly theatrical',
@@ -44,9 +87,10 @@ function buildSpeechFrames(text) {
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
-  const [apiBase, setApiBase] = useState('https://api.openai.com/v1')
+  const [modelProvider, setModelProvider] = useState('openrouter')
+  const [apiBase, setApiBase] = useState(PROVIDER_PRESETS.openrouter.apiBase)
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('gpt-4o-mini')
+  const [model, setModel] = useState(PROVIDER_PRESETS.openrouter.model)
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
@@ -68,6 +112,7 @@ export default function App() {
   const ingestToVisemePipeline = useMemo(() => starterPipeline, [])
   const providerTtsContract = useMemo(() => starterContract, [])
   const providerResponseMap = useMemo(() => starterResponseMap, [])
+  const providerMeta = PROVIDER_PRESETS[modelProvider]
 
   useEffect(() => {
     return () => {
@@ -88,6 +133,19 @@ export default function App() {
     window.speechSynthesis?.addEventListener?.('voiceschanged', loadVoices)
     return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', loadVoices)
   }, [])
+
+  const handleProviderChange = (nextProvider) => {
+    const preset = PROVIDER_PRESETS[nextProvider]
+    setModelProvider(nextProvider)
+    setApiBase(preset.apiBase)
+    setModel(preset.model)
+    setRuntimeProviderLabel(`${preset.id}:${preset.transport}`)
+    if (nextProvider === 'oauthReady') {
+      setRuntimeStatus('OAuth-ready connector scaffold selected — mocked until an official provider OAuth path is confirmed')
+    } else {
+      setRuntimeStatus(`Provider preset selected: ${preset.label}`)
+    }
+  }
 
   const handlePlayTimeline = () => {
     cancelPlaybackRef.current?.()
@@ -148,14 +206,22 @@ export default function App() {
     try {
       let responseText = ''
       let providerLabel = ''
+      const canAttemptLive = modelProvider === 'ollama' || Boolean(apiKey.trim())
 
-      if (apiKey.trim()) {
+      if (modelProvider === 'oauthReady') {
+        responseText = buildDemoReply(persona, userPrompt)
+        providerLabel = 'oauth-ready-mock'
+        setRuntimeStatus('OAuth-ready connector scaffold selected — mocked until an official provider OAuth path is confirmed')
+      } else if (canAttemptLive) {
+        const headers = {
+          'Content-Type': 'application/json',
+        }
+        if (apiKey.trim()) {
+          headers.Authorization = `Bearer ${apiKey.trim()}`
+        }
         const response = await fetch(`${apiBase.replace(/\/$/, '')}/chat/completions`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey.trim()}`,
-          },
+          headers,
           body: JSON.stringify({
             model,
             messages: [
@@ -170,8 +236,8 @@ export default function App() {
         }
         const data = await response.json()
         responseText = data?.choices?.[0]?.message?.content?.trim() || 'Empty provider response'
-        providerLabel = `live-openai-compatible:${model}`
-        setRuntimeStatus('Live provider response received')
+        providerLabel = `live-${providerMeta.id}:${model}`
+        setRuntimeStatus(`Live provider response received via ${providerMeta.label}`)
       } else {
         responseText = buildDemoReply(persona, userPrompt)
         providerLabel = 'demo-local-browser-speech'
@@ -183,7 +249,7 @@ export default function App() {
       speakWithFallback(responseText)
     } catch (error) {
       setRuntimeStatus(`Runtime call failed: ${error.message}`)
-      setRuntimeProviderLabel('live-call-failed')
+      setRuntimeProviderLabel(`${providerMeta.id}:live-call-failed`)
       setAssistantResponse('')
     } finally {
       setIsRunning(false)
@@ -219,6 +285,9 @@ export default function App() {
       <section className="grid two-up">
         <ChatWorkbench
           persona={persona}
+          modelProvider={modelProvider}
+          onModelProvider={handleProviderChange}
+          providerMeta={providerMeta}
           apiBase={apiBase}
           apiKey={apiKey}
           model={model}

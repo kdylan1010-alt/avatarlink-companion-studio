@@ -1,5 +1,8 @@
 export function ChatWorkbench({
   persona,
+  modelProvider,
+  onModelProvider,
+  providerMeta,
   apiBase,
   apiKey,
   model,
@@ -21,10 +24,37 @@ export function ChatWorkbench({
         <p className="eyebrow">Conversation</p>
         <h2>Chat UI + BYOK config</h2>
       </div>
+      <div className="preview-card">
+        <p className="mono">Model provider</p>
+        <label>
+          Model provider
+          <select value={modelProvider} onChange={(e) => onModelProvider(e.target.value)}>
+            <option value="openrouter">OpenRouter (OpenAI-compatible, supports :free models)</option>
+            <option value="gemini">Gemini API key (free-tier friendly scaffold)</option>
+            <option value="ollama">Local Ollama (dev/local)</option>
+            <option value="openai">Official OpenAI API key / project</option>
+            <option value="oauthReady">OAuth-ready provider connector</option>
+          </select>
+        </label>
+        <p className="muted">{providerMeta.authNote}</p>
+        <p className="muted">ChatGPT Free/Plus/Pro login is not the same as OpenAI API access. Use official API key/provider key only.</p>
+        <p className="muted">OAuth-ready provider connector is a generic placeholder only. Mocked until an official provider OAuth path is confirmed.</p>
+        <p className="muted">No secrets in frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
+      </div>
       <div className="stack">
         <label>OpenAI-compatible base URL<input value={apiBase} onChange={(e) => onApiBase(e.target.value)} spellCheck="false" /></label>
         <label>API key (local only)<input value={apiKey} onChange={(e) => onApiKey(e.target.value)} placeholder="sk-..." type="password" spellCheck="false" /></label>
         <label>Model<input value={model} onChange={(e) => onModel(e.target.value)} spellCheck="false" /></label>
+      </div>
+      <div className="preview-card">
+        <p className="mono">Provider connector status</p>
+        <pre>{`{
+  provider: '${providerMeta.id}',
+  label: '${providerMeta.label}',
+  transport: '${providerMeta.transport}',
+  baseUrl: '${apiBase}',
+  model: '${model}'
+}`}</pre>
       </div>
       <div className="preview-card">
         <p className="mono">System prompt preview</p>
@@ -51,8 +81,7 @@ export function ChatWorkbench({
         {isRunning ? 'Running companion…' : 'Run companion reply'}
       </button>
       <p className="muted">
-        Demo mode + browser speech fallback runs end-to-end without paid TTS keys. If a real API base/key/model is entered,
-        the app attempts a live OpenAI-compatible chat completion first.
+        Demo mode + browser speech fallback runs end-to-end without paid TTS keys. OpenRouter, Gemini, Ollama, and official OpenAI API stay on the BYOK path; OAuth is scaffold-only for now.
       </p>
     </section>
   )

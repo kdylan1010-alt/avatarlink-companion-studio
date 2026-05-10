@@ -33,6 +33,11 @@ const checks = [
   ['demo_runtime_mode', source.includes('Demo mode + browser speech fallback')],
   ['voice_selector', source.includes('Voice provider') && source.includes('Voice ID / browser voice')],
   ['runtime_status_panel', source.includes('Companion runtime status') && source.includes('Last assistant response')],
+
+  ['provider_selector', source.includes('Model provider') && source.includes('OpenRouter (OpenAI-compatible, supports :free models)') && source.includes('Gemini API key (free-tier friendly scaffold)') && source.includes('Local Ollama (dev/local)') && source.includes('Official OpenAI API key / project')],
+  ['oauth_ready_scaffold', source.includes('OAuth-ready provider connector') && source.includes('Mocked until an official provider OAuth path is confirmed')],
+  ['no_chatgpt_session_copy', source.includes('ChatGPT Free/Plus/Pro login is not the same as OpenAI API access') && source.includes('Use official API key/provider key only')],
+  ['provider_docs_reference', source.includes('docs/MODEL_PROVIDERS.md')],
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],
   ['lead_dashboard', source.includes('Recent pilot leads')],
   ['lead_persistence', source.includes('localStorage') && source.includes('Export leads CSV')],
