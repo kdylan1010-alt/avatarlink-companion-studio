@@ -13,6 +13,7 @@ Browser-native no-code **VRM/VTuber AI avatar companion engine** MVP.
 - Lead capture persisted in browser localStorage + CSV export
 - Latest lead handoff preview + follow-up draft CTA
 - Lead queue snapshot for operator triage
+- Delivery bridge JSON export for handoff outside the browser
 - OpenAI-compatible BYOK configuration form (local/browser only)
 - TTS adapter stub
 - Web Audio amplitude -> mouth movement stub

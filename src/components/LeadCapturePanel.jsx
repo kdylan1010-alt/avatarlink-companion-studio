@@ -89,6 +89,12 @@ export function LeadCapturePanel() {
   }, [leads])
 
   const queueSummary = useMemo(() => JSON.stringify(leadQueue, null, 2), [leadQueue])
+
+  const deliveryPayload = useMemo(() => JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    queueSize: leadQueue.length,
+    leads: leadQueue,
+  }, null, 2), [leadQueue])
   const handleChange = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }))
   }
@@ -124,6 +130,18 @@ export function LeadCapturePanel() {
     window.URL.revokeObjectURL(url)
     setMessage(`Exported ${leads.length} leads to avatarlink-pilot-leads.csv`)
   }
+
+  const handleExportDeliveryJson = () => {
+    if (typeof window === 'undefined') return
+    const blob = new Blob([deliveryPayload], { type: 'application/json;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'avatarlink-lead-queue.json'
+    link.click()
+    window.URL.revokeObjectURL(url)
+    setMessage(`Exported ${leadQueue.length} queued leads to avatarlink-lead-queue.json`)
+  }
   return (
     <section className="panel human-card" data-testid="lead-capture-panel">
       <div className="section-head">
@@ -157,6 +175,7 @@ export function LeadCapturePanel() {
           </label>
           <button className="primary-button" type="submit">Save pilot lead</button>
           <button className="secondary-button" type="button" onClick={handleExportCsv}>Export leads CSV</button>
+          <button className="secondary-button" type="button" onClick={handleExportDeliveryJson}>Export delivery JSON</button>
           <p className="muted">{message || 'This runnable demo now persists leads in browser localStorage and exports CSV for outreach.'}</p>
         </form>
       </div>
@@ -179,6 +198,10 @@ export function LeadCapturePanel() {
       <div className="preview-card">
         <p className="mono">Lead queue snapshot</p>
         <pre>{queueSummary}</pre>
+      </div>
+      <div className="preview-card">
+        <p className="mono">Delivery bridge payload</p>
+        <pre>{deliveryPayload}</pre>
       </div>
     </section>
   )

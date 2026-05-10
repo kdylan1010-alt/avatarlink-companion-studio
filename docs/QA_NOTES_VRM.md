@@ -73,3 +73,8 @@
 - Added visible `Lead queue snapshot` panel for operator triage.
 - Queue rows now expose `priority`, `nextAction`, and `owner` derived from lead status/order.
 - New smoke proof target: `PASS lead_queue`.
+
+## 2026-05-10 16:08 CST — delivery bridge artifact
+- Added visible `Delivery bridge payload` panel and `Export delivery JSON` button.
+- Export file target: `avatarlink-lead-queue.json`.
+- New smoke proof target: `PASS lead_delivery_bridge`.
