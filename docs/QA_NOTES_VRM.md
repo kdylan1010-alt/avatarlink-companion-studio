@@ -35,3 +35,21 @@
 
 ## Fallback plan
 - If a future sample fails, try `Avatar_Orion.vrm` or `cryptovoxels.vrm` from `madjin/vrm-samples` and record the exact compatibility issue.
+
+## 2026-05-10 14:30 CST — provider response map proof + builder path
+- Commit proving the response-map artifact exists: `f955a3ac090567180defb65343958bc35004b8d1` (`feat: add provider response mapping preview`)
+- Smoke command: `/usr/local/bin/node scripts/qa-smoke.mjs`
+- Smoke result: `PASS provider_response_map` and all listed smoke checks passed.
+- Direct builder command used successfully: `/usr/local/bin/node ./node_modules/vite/bin/vite.js build`
+- Build artifact proof:
+  - `dist/index.html                   0.52 kB`
+  - `dist/assets/index-BKOZzRdD.css    2.92 kB`
+  - `dist/assets/index-BXaq0YMu.js   877.48 kB`
+- Browser-visible proof on `http://127.0.0.1:4173/`:
+  - `Provider response mapping preview`
+  - `provider: stub`
+  - `frameBridgeKey: frames`
+  - `transcriptKey: text`
+  - `voiceKey: voiceId`
+- Remaining blocker is not VRM loading; it is lack of persisted lead capture backend and missing browser-proof for manual user-upload flow.
+
