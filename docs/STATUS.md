@@ -8,13 +8,14 @@
 - Current Pages result: `404 page not found`
 
 ## Latest shipped artifact
-- Commit before this status update: `46fc5c4823abac0cbd8ebade1c0b89eeea1c1535`
-- Artifact: revenue/ops waitlist flow with `Export leads CSV`, `Export delivery JSON`, `LATEST LEAD HANDOFF`, `LEAD QUEUE SNAPSHOT`, and `DELIVERY BRIDGE PAYLOAD`
+- Commit before this status update: `7fef9b64144c8dfa499d359edac0b0c6b4965e64`
+- Artifact: end-to-end companion demo flow with configurable OpenAI-compatible base URL / API key / model, `Run companion reply`, browser speech fallback, and avatar lip-sync playback alongside the existing revenue/ops waitlist panels.
 
 ## Latest verified proof
 - Live page title: `AvatarLink Companion Studio`
 - Delivery proof on page: `queueSize: 2` with hot + warm lead records in the bridge payload
-- Remote/shared delivery target present: `false`
+- Companion flow proof on page: `Run companion reply`, `Voice provider`, `Voice ID / browser voice`, `Companion runtime status`, and `Last assistant response`
+- Debug proof on 2026-05-10: stubbed live provider branch hit `POST /chat/completions`, sent auth header + model + messages, returned `Stubbed live provider reply for wiring proof.`, updated status to `Live provider response received`, and spoke the reply via browser speech.
 
 ## Run + build commands
 ```bash
@@ -25,17 +26,18 @@ python3 -m http.server 4173 -d dist
 ```
 
 ## Current blocker
-- The money-build artifact supports browser persistence and CSV/JSON export, but does not yet expose a remote/shared delivery target or webhook/CRM send path.
+- Shared delivery fallback is no longer the blocker.
+- The remaining blocker is a missing verified successful call against a real OpenAI-compatible provider with valid credentials; live authenticated provider success is not yet proven.
 
 ## Next artifact target
-- Add a visible remote-delivery fallback surface in the app and keep GitHub repo/docs/issues as the shared delivery/inbox path until a real CRM/webhook exists.
+- Capture a real authenticated provider proof run using user-supplied valid endpoint/key/model, then record the exact response path and any provider-specific error if it fails.
 
 ## Fallback artifact
 - Repo artifact path: `artifacts/avatarlink-companion-studio-fallback-a9df7c7.zip`
 - Local artifact path: `/Users/a1111/Desktop/avatarlink-companion-studio/artifacts/avatarlink-companion-studio-fallback-a9df7c7.zip`
+- Build artifact path: `dist/assets/index-bdP3VZfE.js`
 - Build command: `/usr/local/bin/node ./node_modules/vite/bin/vite.js build`
 - Build exit code: `0`
-
 
 ## End-to-end demo fallback
 - Basic flow now runs in-browser with `Run companion reply`.
