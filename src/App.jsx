@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { SafetyOnboarding } from './components/SafetyOnboarding'
 import { PersonaEditor } from './components/PersonaEditor'
 import { VrmStudioPanel } from './components/VrmStudioPanel'
+import { VrmSmokeTest } from './components/VrmSmokeTest'
 import { ChatWorkbench } from './components/ChatWorkbench'
 import { LeadCapturePanel } from './components/LeadCapturePanel'
 import { VoicePanel } from './components/VoicePanel'
@@ -80,6 +81,8 @@ export default function App() {
       <SafetyOnboarding />
 
       <LeadCapturePanel />
+
+      <VrmSmokeTest />
 
       <section className="grid two-up">
         <PersonaEditor persona={persona} onChange={setPersona} />

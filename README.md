@@ -36,3 +36,7 @@ node scripts/qa-smoke.mjs
 ## No secrets policy
 - Do not commit API keys, cookies, tokens, or paid-provider credentials
 - BYOK fields are demo-only and intended for local/runtime wiring later
+
+## Default demo avatar
+- Ships with `public/avatars/sample.vrm` as the default demo avatar
+- Source/license notes live in `docs/DEMO_ASSETS.md`

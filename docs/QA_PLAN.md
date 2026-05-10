@@ -15,3 +15,8 @@
 /usr/local/bin/npm run build
 node scripts/qa-smoke.mjs
 ```
+
+## VRM smoke flow
+1. Verify `/avatars/sample.vrm` returns HTTP 200 with nonzero bytes
+2. Load `VrmSmokeTest` and confirm browser console logs `VRM loaded`
+3. Confirm default sample renders before testing user upload

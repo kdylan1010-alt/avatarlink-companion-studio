@@ -2,6 +2,25 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, VRMUtils, VRMExpressionPresetName } from '@pixiv/three-vrm'
 
+function createLoader() {
+  const loader = new GLTFLoader()
+  loader.register((parser) => new VRMLoaderPlugin(parser))
+  return loader
+}
+
+function summarizeVrm(vrm, fallbackName = 'unknown.vrm') {
+  const humanoidBones = Object.keys(vrm?.humanoid?.humanBones ?? {})
+  const expressionKeys = Object.keys(vrm?.expressionManager?.expressionMap ?? {})
+  return {
+    avatarName: vrm?.meta?.name || fallbackName,
+    specVersion: vrm?.meta?.metaVersion || vrm?.meta?.specVersion || 'unknown',
+    sceneChildren: vrm?.scene?.children?.length ?? 0,
+    humanoidBoneCount: humanoidBones.length,
+    expressionCount: expressionKeys.length,
+    expressionKeys,
+  }
+}
+
 export async function createVrmPreview(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -35,6 +54,20 @@ export async function createVrmPreview(canvas) {
     manager.setValue(VRMExpressionPresetName.Aa, currentMouthOpen)
   }
 
+  const mountVrm = (vrm, fallbackName) => {
+    if (!vrm) throw new Error('Loaded asset did not expose a VRM avatar')
+    if (currentVrm) {
+      scene.remove(currentVrm.scene)
+      VRMUtils.deepDispose(currentVrm.scene)
+    }
+    VRMUtils.rotateVRM0(vrm)
+    currentVrm = vrm
+    currentVrm.scene.position.set(0, -1.15, 0)
+    applyMouthOpen()
+    scene.add(currentVrm.scene)
+    return summarizeVrm(vrm, fallbackName)
+  }
+
   const render = () => {
     raf = requestAnimationFrame(render)
     const delta = clock.getDelta()
@@ -60,31 +93,19 @@ export async function createVrmPreview(canvas) {
 
   return {
     async loadFile(file) {
-      const loader = new GLTFLoader()
-      loader.register((parser) => new VRMLoaderPlugin(parser))
+      const loader = createLoader()
       const url = URL.createObjectURL(file)
       try {
         const gltf = await loader.loadAsync(url)
-        const vrm = gltf.userData.vrm
-        if (!vrm) {
-          throw new Error('Loaded file did not expose a VRM avatar')
-        }
-        if (currentVrm) {
-          scene.remove(currentVrm.scene)
-          VRMUtils.deepDispose(currentVrm.scene)
-        }
-        VRMUtils.rotateVRM0(vrm)
-        currentVrm = vrm
-        currentVrm.scene.position.set(0, -1.15, 0)
-        applyMouthOpen()
-        scene.add(currentVrm.scene)
-        return {
-          avatarName: vrm.meta?.name || file.name,
-          specVersion: vrm.meta?.metaVersion || 'unknown',
-        }
+        return mountVrm(gltf.userData.vrm, file.name)
       } finally {
         URL.revokeObjectURL(url)
       }
+    },
+    async loadUrl(url) {
+      const loader = createLoader()
+      const gltf = await loader.loadAsync(url)
+      return mountVrm(gltf.userData.vrm, url)
     },
     setMouthOpen(value) {
       currentMouthOpen = Math.min(1, Math.max(0, value))

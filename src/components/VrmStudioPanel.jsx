@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createVrmPreview } from '../lib/vrmRuntime'
 
+const SAMPLE_PATH = '/avatars/sample.vrm'
+
 export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
   const canvasRef = useRef(null)
   const runtimeRef = useRef(null)
@@ -14,10 +16,17 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
       if (!canvasRef.current) return
       runtimeRef.current = await createVrmPreview(canvasRef.current)
       runtimeRef.current.setMouthOpen(mouthOpen)
-      if (mounted) setRenderStatus('Preview canvas live — choose a .vrm file to inspect it in-browser')
+      const result = await runtimeRef.current.loadUrl(SAMPLE_PATH)
+      console.log('Default sample VRM loaded', result)
+      onUploadName('sample.vrm')
+      if (mounted) {
+        setMeta(`${result?.avatarName || 'sample.vrm'} • VRM ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
+        setRenderStatus('Default sample avatar rendered from /avatars/sample.vrm')
+      }
     }
 
     boot().catch((error) => {
+      console.error('Default sample avatar failed', error)
       if (mounted) setRenderStatus(`Preview failed: ${error.message}`)
     })
 
@@ -26,7 +35,7 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
       runtimeRef.current?.destroy()
       runtimeRef.current = null
     }
-  }, [])
+  }, [onUploadName])
 
   useEffect(() => {
     runtimeRef.current?.setMouthOpen(mouthOpen)
@@ -40,9 +49,10 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
 
     try {
       const result = await runtimeRef.current?.loadFile(file)
-      setMeta(`${result?.avatarName || file.name} • VRM ${result?.specVersion || 'unknown'}`)
+      setMeta(`${result?.avatarName || file.name} • VRM ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
       setRenderStatus('VRM preview rendered in-browser')
     } catch (error) {
+      console.error('Uploaded VRM failed', error)
       setMeta('VRM metadata unavailable')
       setRenderStatus(`VRM load failed: ${error.message}`)
     }
@@ -64,6 +74,8 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
       <div className="preview-card">
         <p className="mono">Loaded asset</p>
         <strong>{uploadedVrmName}</strong>
+        <p className="mono">Default sample path</p>
+        <p>{SAMPLE_PATH}</p>
         <p className="mono">Mouth-open signal</p>
         <p>{mouthOpen.toFixed(2)}</p>
         <p className="mono">Render status</p>

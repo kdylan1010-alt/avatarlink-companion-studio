@@ -7,6 +7,8 @@ const source = [
   '../src/components/PersonaEditor.jsx',
   '../src/components/VrmStudioPanel.jsx',
   '../src/components/ChatWorkbench.jsx',
+  '../src/components/LeadCapturePanel.jsx',
+  '../src/components/VrmSmokeTest.jsx',
   '../src/components/VoicePanel.jsx',
 ].map((path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 const css = fs.readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8')
@@ -29,6 +31,8 @@ const checks = [
   ['provider_response_map', source.includes('Provider response mapping preview')],
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],
   ['lead_dashboard', source.includes('Recent pilot leads')],
+  ['default_sample_vrm', source.includes('/avatars/sample.vrm')],
+  ['vrm_smoke_test', source.includes('Standalone default avatar loader')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
 ]
