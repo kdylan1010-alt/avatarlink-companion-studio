@@ -35,3 +35,9 @@ python3 -m http.server 4173 -d dist
 - Local artifact path: `/Users/a1111/Desktop/avatarlink-companion-studio/artifacts/avatarlink-companion-studio-fallback-a9df7c7.zip`
 - Build command: `/usr/local/bin/node ./node_modules/vite/bin/vite.js build`
 - Build exit code: `0`
+
+
+## End-to-end demo fallback
+- Basic flow now runs in-browser with `Run companion reply`.
+- If no API key is entered, the app uses demo-local browser speech fallback and animates the avatar mouth while speaking.
+- Remaining real-runtime blocker: no verified live provider credential/test response has been supplied yet, so live OpenAI-compatible success is not proven complete.

@@ -12,6 +12,12 @@ export function VoicePanel({
   ingestToVisemePipeline,
   providerTtsContract,
   providerResponseMap,
+  voiceProvider,
+  onVoiceProviderChange,
+  voiceId,
+  onVoiceIdChange,
+  availableVoices,
+  speechStatus,
 }) {
   const demoFrames = visemeTimeline.map((frame) => Number(frame.mouthOpen.toFixed(2)))
   const derivedAmplitude = normalizeAmplitude(demoFrames)
@@ -24,11 +30,30 @@ export function VoicePanel({
         <h2>TTS adapter stub + mouth movement signal</h2>
       </div>
       <div className="preview-card">
+        <p className="mono">Voice provider</p>
+        <label>
+          Voice provider
+          <select value={voiceProvider} onChange={(event) => onVoiceProviderChange(event.target.value)}>
+            <option value="browser-speech">browser-speech</option>
+            <option value="provider-api-todo">provider-api-todo</option>
+          </select>
+        </label>
+        <label>
+          Voice ID / browser voice
+          <select value={voiceId} onChange={(event) => onVoiceIdChange(event.target.value)}>
+            {availableVoices.map((voice) => (
+              <option key={voice.id} value={voice.id}>{voice.label}</option>
+            ))}
+          </select>
+        </label>
+        <p className="muted">{speechStatus}</p>
+      </div>
+      <div className="preview-card">
         <p className="mono">TTS adapter contract</p>
         <pre>{`{
-  provider: 'stub',
+  provider: '${voiceProvider}',
   text: 'Hello from your avatar companion',
-  voiceId: 'demo-voice',
+  voiceId: '${voiceId}',
   format: 'wav'
 }`}</pre>
       </div>
@@ -87,7 +112,7 @@ export function VoicePanel({
         <div className="meter meter-3"></div>
         <div className="meter meter-4"></div>
       </div>
-      <p className="muted">Current preview signal is wired into the VRM runtime; next step is real audio-frame analysis from TTS playback.</p>
+      <p className="muted">Current preview signal is wired into the VRM runtime; browser speech fallback animates the avatar mouth while speaking.</p>
     </section>
   )
 }

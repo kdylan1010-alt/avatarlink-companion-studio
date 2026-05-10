@@ -1,4 +1,20 @@
-export function ChatWorkbench({ persona, apiBase, apiKey, model, onApiBase, onApiKey, onModel, systemPromptPreview }) {
+export function ChatWorkbench({
+  persona,
+  apiBase,
+  apiKey,
+  model,
+  onApiBase,
+  onApiKey,
+  onModel,
+  systemPromptPreview,
+  userPrompt,
+  onUserPrompt,
+  onRunCompanion,
+  runtimeStatus,
+  assistantResponse,
+  runtimeProviderLabel,
+  isRunning,
+}) {
   return (
     <section className="panel human-card" data-testid="chat-workbench">
       <div className="section-head">
@@ -16,9 +32,28 @@ export function ChatWorkbench({ persona, apiBase, apiKey, model, onApiBase, onAp
       </div>
       <div className="chat-card">
         <div className="bubble bubble-avatar">{persona.opener}</div>
-        <div className="bubble bubble-user">Draft a welcome scene for a first-time fan.</div>
+        <label>
+          User test message
+          <textarea value={userPrompt} onChange={(e) => onUserPrompt(e.target.value)} rows={4} />
+        </label>
+        <div className="bubble bubble-user">{userPrompt}</div>
+        <div className="bubble bubble-avatar">{assistantResponse || 'Assistant response will appear here after you run the companion.'}</div>
       </div>
-      <button className="primary-button" type="button">Connect runtime later</button>
+      <div className="preview-card">
+        <p className="mono">Companion runtime status</p>
+        <p>{runtimeStatus}</p>
+        <p className="mono">Last provider path</p>
+        <p>{runtimeProviderLabel}</p>
+        <p className="mono">Last assistant response</p>
+        <pre>{assistantResponse || 'No assistant response yet'}</pre>
+      </div>
+      <button className="primary-button" type="button" onClick={onRunCompanion} disabled={isRunning}>
+        {isRunning ? 'Running companion…' : 'Run companion reply'}
+      </button>
+      <p className="muted">
+        Demo mode + browser speech fallback runs end-to-end without paid TTS keys. If a real API base/key/model is entered,
+        the app attempts a live OpenAI-compatible chat completion first.
+      </p>
     </section>
   )
 }

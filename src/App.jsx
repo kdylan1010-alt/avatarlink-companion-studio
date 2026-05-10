@@ -32,6 +32,16 @@ const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge
 const starterContract = buildProviderTtsContract({})
 const starterResponseMap = buildProviderResponseMap(starterContract)
 
+function buildDemoReply(persona, userPrompt) {
+  return `${persona.name}: I heard “${userPrompt}.” Let's turn that into a flirty companion moment: greet the fan warmly, tease one premium perk, and invite them into a private follow-up scene.`
+}
+
+function buildSpeechFrames(text) {
+  const tokens = text.split(/\s+/).filter(Boolean).slice(0, 10)
+  const values = tokens.length ? tokens.map((token, index) => Number((0.15 + ((token.length + index) % 5) * 0.14).toFixed(2))) : [0.18, 0.26, 0.34, 0.22]
+  return buildVisemeTimeline(values)
+}
+
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
   const [apiBase, setApiBase] = useState('https://api.openai.com/v1')
@@ -40,7 +50,17 @@ export default function App() {
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
+  const [userPrompt, setUserPrompt] = useState('Draft a welcome scene for a first-time fan.')
+  const [assistantResponse, setAssistantResponse] = useState('')
+  const [runtimeStatus, setRuntimeStatus] = useState('Waiting for a real or demo companion run')
+  const [runtimeProviderLabel, setRuntimeProviderLabel] = useState('demo mode not run yet')
+  const [voiceProvider, setVoiceProvider] = useState('browser-speech')
+  const [voiceId, setVoiceId] = useState('browser-default')
+  const [speechStatus, setSpeechStatus] = useState('Browser speech fallback ready')
+  const [availableVoices, setAvailableVoices] = useState([{ id: 'browser-default', label: 'browser-default' }])
+  const [isRunning, setIsRunning] = useState(false)
   const cancelPlaybackRef = useRef(() => {})
+  const speechUtteranceRef = useRef(null)
   const visemeTimeline = useMemo(() => starterTimeline, [])
   const audioFrameAnalysis = useMemo(() => starterAnalysis, [])
   const ttsFrameBridge = useMemo(() => starterBridge, [])
@@ -50,7 +70,23 @@ export default function App() {
   const providerResponseMap = useMemo(() => starterResponseMap, [])
 
   useEffect(() => {
-    return () => cancelPlaybackRef.current?.()
+    return () => {
+      cancelPlaybackRef.current?.()
+      window.speechSynthesis?.cancel?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis?.getVoices?.() || []
+      if (!voices.length) return
+      const nextVoices = [{ id: 'browser-default', label: 'browser-default' }, ...voices.map((voice) => ({ id: voice.voiceURI, label: `${voice.name} (${voice.lang})` }))]
+      setAvailableVoices(nextVoices)
+      setVoiceId((current) => nextVoices.some((voice) => voice.id === current) ? current : nextVoices[0].id)
+    }
+    loadVoices()
+    window.speechSynthesis?.addEventListener?.('voiceschanged', loadVoices)
+    return () => window.speechSynthesis?.removeEventListener?.('voiceschanged', loadVoices)
   }, [])
 
   const handlePlayTimeline = () => {
@@ -62,13 +98,97 @@ export default function App() {
     }, ttsFrameBridge.frameMs)
     const totalMs = Math.max(ttsFrameBridge.frameMs, visemeTimeline.length * ttsFrameBridge.frameMs + 20)
     window.setTimeout(() => {
-      setPlaybackStatus('Playback complete — ready to map real TTS frames')
+      setPlaybackStatus('Playback complete — ready to map real or demo speech frames')
     }, totalMs)
   }
 
   const systemPromptPreview = useMemo(() => {
     return `You are ${persona.name}. Tone: ${persona.tone}. Boundaries: ${persona.boundaries}. Opening style: ${persona.opener}`
   }, [persona])
+
+  const speakWithFallback = (text) => {
+    cancelPlaybackRef.current?.()
+    const timeline = buildSpeechFrames(text)
+    cancelPlaybackRef.current = playVisemeTimeline(timeline, (frame) => {
+      setMouthOpen(frame.mouthOpen)
+      setPlaybackStatus(`Speaking frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 140)
+
+    if (voiceProvider !== 'browser-speech') {
+      setSpeechStatus('Provider API TODO selected — lip-sync demo ran without browser speech audio')
+      return
+    }
+
+    if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+      setSpeechStatus('Browser speech unavailable — ran lip-sync demo without audio')
+      return
+    }
+
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    speechUtteranceRef.current = utterance
+    const voiceMatch = availableVoices.find((voice) => voice.id === voiceId)
+    const nativeVoices = window.speechSynthesis.getVoices?.() || []
+    if (voiceMatch && voiceMatch.id !== 'browser-default') {
+      utterance.voice = nativeVoices.find((voice) => voice.voiceURI === voiceMatch.id) || null
+    }
+    utterance.onstart = () => setSpeechStatus(`Browser speech speaking via ${voiceMatch?.label || 'browser-default'}`)
+    utterance.onend = () => {
+      setSpeechStatus(`Browser speech completed via ${voiceMatch?.label || 'browser-default'}`)
+      setPlaybackStatus('Speech complete — avatar returned to idle')
+      setMouthOpen(0.12)
+    }
+    utterance.onerror = (event) => setSpeechStatus(`Browser speech error: ${event.error || 'unknown'}`)
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const handleRunCompanion = async () => {
+    setIsRunning(true)
+    setRuntimeStatus('Running companion request…')
+    try {
+      let responseText = ''
+      let providerLabel = ''
+
+      if (apiKey.trim()) {
+        const response = await fetch(`${apiBase.replace(/\/$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey.trim()}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPromptPreview },
+              { role: 'user', content: userPrompt },
+            ],
+          }),
+        })
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`API ${response.status}: ${errorText.slice(0, 220)}`)
+        }
+        const data = await response.json()
+        responseText = data?.choices?.[0]?.message?.content?.trim() || 'Empty provider response'
+        providerLabel = `live-openai-compatible:${model}`
+        setRuntimeStatus('Live provider response received')
+      } else {
+        responseText = buildDemoReply(persona, userPrompt)
+        providerLabel = 'demo-local-browser-speech'
+        setRuntimeStatus('Demo mode reply rendered with browser speech fallback')
+      }
+
+      setAssistantResponse(responseText)
+      setRuntimeProviderLabel(providerLabel)
+      speakWithFallback(responseText)
+    } catch (error) {
+      setRuntimeStatus(`Runtime call failed: ${error.message}`)
+      setRuntimeProviderLabel('live-call-failed')
+      setAssistantResponse('')
+    } finally {
+      setIsRunning(false)
+    }
+  }
 
   return (
     <main className="shell">
@@ -106,6 +226,13 @@ export default function App() {
           onApiKey={setApiKey}
           onModel={setModel}
           systemPromptPreview={systemPromptPreview}
+          userPrompt={userPrompt}
+          onUserPrompt={setUserPrompt}
+          onRunCompanion={handleRunCompanion}
+          runtimeStatus={runtimeStatus}
+          assistantResponse={assistantResponse}
+          runtimeProviderLabel={runtimeProviderLabel}
+          isRunning={isRunning}
         />
         <VoicePanel
           mouthOpen={mouthOpen}
@@ -119,6 +246,12 @@ export default function App() {
           ingestToVisemePipeline={ingestToVisemePipeline}
           providerTtsContract={providerTtsContract}
           providerResponseMap={providerResponseMap}
+          voiceProvider={voiceProvider}
+          onVoiceProviderChange={setVoiceProvider}
+          voiceId={voiceId}
+          onVoiceIdChange={setVoiceId}
+          availableVoices={availableVoices}
+          speechStatus={speechStatus}
         />
       </section>
     </main>
