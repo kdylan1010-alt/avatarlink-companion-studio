@@ -68,3 +68,8 @@
 - Added visible `Latest lead handoff` panel to the revenue path.
 - Added `Open follow-up draft` CTA using a generated `mailto:` link from the newest lead.
 - New smoke proof target: `PASS lead_handoff`.
+
+## 2026-05-10 15:46 CST — lead queue artifact
+- Added visible `Lead queue snapshot` panel for operator triage.
+- Queue rows now expose `priority`, `nextAction`, and `owner` derived from lead status/order.
+- New smoke proof target: `PASS lead_queue`.

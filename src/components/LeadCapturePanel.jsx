@@ -77,6 +77,18 @@ export function LeadCapturePanel() {
     ].join('\n'))
     return `mailto:${latestLead.email}?subject=${subject}&body=${body}`
   }, [latestLead])
+
+  const leadQueue = useMemo(() => {
+    return leads.map((lead, index) => ({
+      rank: index + 1,
+      owner: 'sales',
+      priority: index === 0 ? 'hot' : lead.status === 'needs_demo' ? 'warm' : 'follow_up',
+      nextAction: index === 0 ? 'send_followup_now' : lead.status === 'needs_demo' ? 'book_demo' : 'review_pipeline',
+      ...lead,
+    }))
+  }, [leads])
+
+  const queueSummary = useMemo(() => JSON.stringify(leadQueue, null, 2), [leadQueue])
   const handleChange = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }))
   }
@@ -163,6 +175,10 @@ export function LeadCapturePanel() {
         <p>{latestLead ? `${latestLead.name} • ${latestLead.email}` : 'No lead captured yet'}</p>
         <pre>{latestLeadPayload}</pre>
         <a className="primary-button" href={outreachMailto}>Open follow-up draft</a>
+      </div>
+      <div className="preview-card">
+        <p className="mono">Lead queue snapshot</p>
+        <pre>{queueSummary}</pre>
       </div>
     </section>
   )

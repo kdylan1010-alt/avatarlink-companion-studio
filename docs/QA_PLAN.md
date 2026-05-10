@@ -23,3 +23,4 @@ node scripts/qa-smoke.mjs
 
 4. Confirm lead persistence + CSV export controls render and smoke passes
 5. Confirm lead handoff preview + follow-up draft CTA render and smoke passes
+6. Confirm lead queue snapshot renders and smoke passes
