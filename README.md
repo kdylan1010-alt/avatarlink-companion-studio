@@ -29,7 +29,8 @@ cd /Users/a1111/Desktop/avatarlink-companion-studio
 
 ## Build
 ```bash
-/usr/local/bin/npm run build
+cd /Users/a1111/Desktop/avatarlink-companion-studio
+/usr/local/bin/node ./node_modules/vite/bin/vite.js build
 ```
 
 ## QA smoke
@@ -44,3 +45,10 @@ node scripts/qa-smoke.mjs
 ## Default demo avatar
 - Ships with `public/avatars/sample.vrm` as the default demo avatar
 - Source/license notes live in `docs/DEMO_ASSETS.md`
+
+
+## Shared delivery fallback
+- Repo delivery surface: `https://github.com/kdylan1010-alt/avatarlink-companion-studio`
+- Live local demo: `http://127.0.0.1:4173/`
+- Status ledger: `docs/STATUS.md`
+- Team inbox + blocker routing: `docs/DELIVERY_AND_INBOX.md`
