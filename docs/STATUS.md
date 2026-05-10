@@ -29,3 +29,9 @@ python3 -m http.server 4173 -d dist
 
 ## Next artifact target
 - Add a visible remote-delivery fallback surface in the app and keep GitHub repo/docs/issues as the shared delivery/inbox path until a real CRM/webhook exists.
+
+## Fallback artifact
+- Repo artifact path: `artifacts/avatarlink-companion-studio-fallback-a9df7c7.zip`
+- Local artifact path: `/Users/a1111/Desktop/avatarlink-companion-studio/artifacts/avatarlink-companion-studio-fallback-a9df7c7.zip`
+- Build command: `/usr/local/bin/node ./node_modules/vite/bin/vite.js build`
+- Build exit code: `0`
