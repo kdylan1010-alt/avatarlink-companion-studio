@@ -32,6 +32,7 @@ const checks = [
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],
   ['lead_dashboard', source.includes('Recent pilot leads')],
   ['lead_persistence', source.includes('localStorage') && source.includes('Export leads CSV')],
+  ['lead_handoff', source.includes('Latest lead handoff') && source.includes('Open follow-up draft')],
   ['default_sample_vrm', source.includes('/avatars/sample.vrm')],
   ['simulated_upload_proof', source.includes('Run simulated upload proof') && source.includes('simulated upload')],
   ['vrm_smoke_test', source.includes('Standalone default avatar loader')],

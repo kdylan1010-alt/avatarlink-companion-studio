@@ -56,6 +56,27 @@ export function LeadCapturePanel() {
   const offerSummary = useMemo(() => {
     return 'Founding pilot offer: custom VRM companion demo, lead capture setup, and launch support.'
   }, [])
+
+  const latestLead = leads[0] ?? null
+
+  const latestLeadPayload = useMemo(() => {
+    return latestLead ? JSON.stringify(latestLead, null, 2) : 'No leads captured yet.'
+  }, [latestLead])
+
+  const outreachMailto = useMemo(() => {
+    if (!latestLead?.email) return '#'
+    const subject = encodeURIComponent(`AvatarLink pilot follow-up for ${latestLead.name}`)
+    const body = encodeURIComponent([
+      `Hi ${latestLead.name},`,
+      '',
+      'Thanks for the interest in the AvatarLink pilot.',
+      `Use case noted: ${latestLead.useCase}`,
+      'Next step: send a VRM + schedule a 15-minute demo review.',
+      '',
+      '— AvatarLink Companion Studio',
+    ].join('\n'))
+    return `mailto:${latestLead.email}?subject=${subject}&body=${body}`
+  }, [latestLead])
   const handleChange = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }))
   }
@@ -136,6 +157,12 @@ export function LeadCapturePanel() {
             </li>
           ))}
         </ul>
+      </div>
+      <div className="preview-card">
+        <p className="mono">Latest lead handoff</p>
+        <p>{latestLead ? `${latestLead.name} • ${latestLead.email}` : 'No lead captured yet'}</p>
+        <pre>{latestLeadPayload}</pre>
+        <a className="primary-button" href={outreachMailto}>Open follow-up draft</a>
       </div>
     </section>
   )

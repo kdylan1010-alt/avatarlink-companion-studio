@@ -34,3 +34,8 @@
 - Added `Export leads CSV` button and browser `localStorage` persistence in `src/components/LeadCapturePanel.jsx`.
 - New smoke proof target: `PASS lead_persistence`.
 - Revenue artifact is now more concrete than React-only state: saved leads survive reload in-browser and can be exported as `avatarlink-pilot-leads.csv`.
+
+## 2026-05-10 15:24 CST — operator handoff artifact
+- Added visible `Latest lead handoff` panel to the revenue path.
+- Added `Open follow-up draft` CTA using a generated `mailto:` link from the newest lead.
+- New smoke proof target: `PASS lead_handoff`.

@@ -22,3 +22,4 @@ node scripts/qa-smoke.mjs
 3. Confirm default sample renders before testing user upload
 
 4. Confirm lead persistence + CSV export controls render and smoke passes
+5. Confirm lead handoff preview + follow-up draft CTA render and smoke passes
