@@ -17,6 +17,14 @@ import { buildProviderTtsContract } from './lib/providerTtsContract'
 import { buildProviderResponseMap } from './lib/providerResponseMap'
 
 const PROVIDER_PRESETS = {
+  mock: {
+    id: 'mock',
+    label: 'Mock / test mode (no paid key required)',
+    apiBase: 'https://mock.local/v1',
+    model: 'demo-local-companion',
+    transport: 'mock',
+    authNote: 'Safe local demo path. No ChatGPT cookies, no session scraping, no paid key required.',
+  },
   openrouter: {
     id: 'openrouter',
     label: 'OpenRouter (OpenAI-compatible, supports :free models)',
@@ -87,10 +95,10 @@ function buildSpeechFrames(text) {
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
-  const [modelProvider, setModelProvider] = useState('openrouter')
-  const [apiBase, setApiBase] = useState(PROVIDER_PRESETS.openrouter.apiBase)
+  const [modelProvider, setModelProvider] = useState('mock')
+  const [apiBase, setApiBase] = useState(PROVIDER_PRESETS.mock.apiBase)
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState(PROVIDER_PRESETS.openrouter.model)
+  const [model, setModel] = useState(PROVIDER_PRESETS.mock.model)
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
@@ -169,7 +177,7 @@ export default function App() {
     return `You are ${persona.name}. Tone: ${persona.tone}. Boundaries: ${persona.boundaries}. Opening style: ${persona.opener}`
   }, [persona])
 
-  const speakWithFallback = (text) => {
+  const speakWithFallback = (text, options = {}) => {
     cancelPlaybackRef.current?.()
     setAvatarMood('speaking')
     const timeline = buildSpeechFrames(text)
@@ -180,6 +188,8 @@ export default function App() {
 
     if (voiceProvider !== 'browser-speech') {
       setSpeechStatus('Provider API TODO selected — lip-sync demo ran without browser speech audio')
+      if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
+      if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
       window.setTimeout(() => setAvatarMood('celebrate'), 160)
       window.setTimeout(() => setAvatarMood('idle'), 1100)
       return
@@ -187,6 +197,8 @@ export default function App() {
 
     if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
       setSpeechStatus('Browser speech unavailable — ran lip-sync demo without audio')
+      if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
+      if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
       window.setTimeout(() => setAvatarMood('celebrate'), 160)
       window.setTimeout(() => setAvatarMood('idle'), 1100)
       return
@@ -204,11 +216,21 @@ export default function App() {
     utterance.onend = () => {
       setSpeechStatus(`Browser speech completed via ${voiceMatch?.label || 'browser-default'}`)
       setPlaybackStatus('Speech complete — avatar returned to idle')
+      if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
+      if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
       setAvatarMood('celebrate')
       setMouthOpen(0.12)
       window.setTimeout(() => setAvatarMood('idle'), 1000)
     }
-    utterance.onerror = (event) => setSpeechStatus(`Browser speech error: ${event.error || 'unknown'}`)
+    utterance.onerror = (event) => {
+      setSpeechStatus(`Browser speech error: ${event.error || 'unknown'} — lip-sync demo continued without audio`)
+      if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
+      if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
+      setPlaybackStatus('Speech fallback complete — mouth/expression pipeline kept running without browser audio')
+      setAvatarMood('celebrate')
+      setMouthOpen(0.12)
+      window.setTimeout(() => setAvatarMood('idle'), 1000)
+    }
     window.speechSynthesis.speak(utterance)
   }
 
@@ -317,6 +339,67 @@ export default function App() {
     }, totalMs)
   }
 
+
+  const handleRunFullDemo = async () => {
+    setIsRunning(true)
+    cancelPlaybackRef.current?.()
+    setAvatarMood('listening')
+    setMovementProofStatus('Full demo pipeline running: sample VRM + voice + provider/mock + chat response + speech + mouth rig')
+    setRuntimeStatus('Full demo pipeline running: preparing provider/mock response')
+    setPlaybackStatus('Full demo pipeline armed — waiting for response text and speech frames')
+    try {
+      let responseText = ''
+      let providerLabel = ''
+      const canAttemptLive = modelProvider === 'ollama' || Boolean(apiKey.trim())
+
+      if (modelProvider === 'mock' || modelProvider === 'oauthReady') {
+        responseText = buildDemoReply(persona, userPrompt)
+        providerLabel = modelProvider === 'mock' ? 'full-demo:mock' : 'full-demo:oauth-ready-mock'
+        setRuntimeStatus(`Full demo pipeline running via ${providerMeta.label}`)
+      } else if (canAttemptLive) {
+        const headers = { 'Content-Type': 'application/json' }
+        if (apiKey.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`
+        const response = await fetch(`${apiBase.replace(/\/$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPromptPreview },
+              { role: 'user', content: userPrompt },
+            ],
+          }),
+        })
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`API ${response.status}: ${errorText.slice(0, 220)}`)
+        }
+        const data = await response.json()
+        responseText = data?.choices?.[0]?.message?.content?.trim() || 'Empty provider response'
+        providerLabel = `full-demo:live-${providerMeta.id}:${model}`
+        setRuntimeStatus(`Full demo pipeline running via live ${providerMeta.label}`)
+      } else {
+        responseText = buildDemoReply(persona, userPrompt)
+        providerLabel = `full-demo:fallback-${providerMeta.id}`
+        setRuntimeStatus(`Full demo pipeline running via fallback mock because no live key was provided for ${providerMeta.label}`)
+      }
+
+      setAssistantResponse(responseText)
+      setRuntimeProviderLabel(providerLabel)
+      speakWithFallback(responseText, {
+        finalMovementProofStatus: 'Full demo complete — VRM + voice + provider/mock + chat + speech + mouth movement chain visible',
+        finalRuntimeStatus: 'Full demo complete — user message produced a spoken response and drove avatar mouth/expression motion',
+      })
+    } catch (error) {
+      setRuntimeStatus(`Full demo pipeline failed: ${error.message}`)
+      setRuntimeProviderLabel(`full-demo:${providerMeta.id}:failed`)
+      setAssistantResponse('')
+      setAvatarMood('idle')
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
   const handleRunCompanion = async () => {
     setIsRunning(true)
     setAvatarMood('listening')
@@ -404,6 +487,7 @@ export default function App() {
           onReplayChatReaction={handleReplayChatReaction}
           onRunIdleResetProof={handleRunIdleResetProof}
           onRunMouthAmplitudeProof={handleRunMouthAmplitudeProof}
+          onRunFullDemo={handleRunFullDemo}
           isMovementProofRunning={isMovementProofRunning}
           assistantResponse={assistantResponse}
           runtimeStatus={runtimeStatus}

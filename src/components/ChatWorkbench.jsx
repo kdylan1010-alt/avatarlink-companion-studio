@@ -29,6 +29,7 @@ export function ChatWorkbench({
         <label>
           Model provider
           <select value={modelProvider} onChange={(e) => onModelProvider(e.target.value)}>
+            <option value="mock">Mock / test mode (no paid key required)</option>
             <option value="openrouter">OpenRouter (OpenAI-compatible, supports :free models)</option>
             <option value="gemini">Gemini API key (free-tier friendly scaffold)</option>
             <option value="ollama">Local Ollama (dev/local)</option>

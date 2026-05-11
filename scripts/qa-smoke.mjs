@@ -34,7 +34,7 @@ const checks = [
   ['voice_selector', source.includes('Voice provider') && source.includes('Voice ID / browser voice')],
   ['runtime_status_panel', source.includes('Companion runtime status') && source.includes('Last assistant response')],
 
-  ['provider_selector', source.includes('Model provider') && source.includes('OpenRouter (OpenAI-compatible, supports :free models)') && source.includes('Gemini API key (free-tier friendly scaffold)') && source.includes('Local Ollama (dev/local)') && source.includes('Official OpenAI API key / project')],
+  ['provider_selector', source.includes('Model provider') && source.includes('Mock / test mode (no paid key required)') && source.includes('OpenRouter (OpenAI-compatible, supports :free models)') && source.includes('Gemini API key (free-tier friendly scaffold)') && source.includes('Local Ollama (dev/local)') && source.includes('Official OpenAI API key / project')],
   ['oauth_ready_scaffold', source.includes('OAuth-ready provider connector') && source.includes('Mocked until an official provider OAuth path is confirmed')],
   ['no_chatgpt_session_copy', source.includes('ChatGPT Free/Plus/Pro login is not the same as OpenAI API access') && source.includes('Use official API key/provider key only')],
   ['provider_docs_reference', source.includes('docs/MODEL_PROVIDERS.md')],
@@ -54,6 +54,7 @@ const checks = [
   ['movement_replay_button', source.includes('Replay chat reaction')],
   ['movement_idle_reset_proof', source.includes('Idle reset proof') && source.includes('Run idle reset proof')],
   ['movement_mouth_amplitude_proof', source.includes('Mouth amplitude proof') && source.includes('Run mouth amplitude proof')],
+  ['full_demo_pipeline', source.includes('Full demo pipeline') && source.includes('Run full demo') && source.includes('provider/mock + chat response + speech + mouth rig')],
   ['vrm_smoke_test', source.includes('Standalone default avatar loader')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],
