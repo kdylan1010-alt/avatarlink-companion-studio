@@ -264,6 +264,33 @@ export default function App() {
     }, totalMs)
   }
 
+
+  const handleRunIdleResetProof = () => {
+    cancelPlaybackRef.current?.()
+    setAvatarMood('listening')
+    setMovementProofStatus('Idle reset proof running: avatar cycling back to calm idle after response pose')
+    setRuntimeStatus('Idle reset proof running from local movement controls')
+    setRuntimeProviderLabel('movement-proof:idle-reset')
+    setAssistantResponse('Idle reset proof: avatar completed the response pose, then cooled down into a stable idle state.')
+    setPlaybackStatus('Idle reset proof armed — settling head sway and mouth back to baseline')
+
+    const resetTimeline = buildVisemeTimeline([0.22, 0.44, 0.16, 0.08, 0.02])
+    cancelPlaybackRef.current = playVisemeTimeline(resetTimeline, (frame) => {
+      setMouthOpen(frame.mouthOpen)
+      setAvatarMood(frame.mouthOpen > 0.18 ? 'listening' : 'idle')
+      setPlaybackStatus(`Idle reset proof frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 150)
+
+    const totalMs = resetTimeline.length * 150 + 80
+    window.setTimeout(() => {
+      setAvatarMood('idle')
+      setMouthOpen(0.02)
+      setMovementProofStatus('Idle reset proof complete — avatar returned to calm idle after the chat reaction')
+      setRuntimeStatus('Idle reset proof complete — response pose cooled down into stable idle')
+      setPlaybackStatus('Idle reset proof complete — idle baseline restored')
+    }, totalMs)
+  }
+
   const handleRunCompanion = async () => {
     setIsRunning(true)
     setAvatarMood('listening')
@@ -349,6 +376,7 @@ export default function App() {
           movementProofStatus={movementProofStatus}
           onRunMovementProof={handleRunMovementProof}
           onReplayChatReaction={handleReplayChatReaction}
+          onRunIdleResetProof={handleRunIdleResetProof}
           isMovementProofRunning={isMovementProofRunning}
           assistantResponse={assistantResponse}
           runtimeStatus={runtimeStatus}

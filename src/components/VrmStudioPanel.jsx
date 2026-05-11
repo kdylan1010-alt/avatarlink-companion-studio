@@ -11,6 +11,7 @@ export function VrmStudioPanel({
   movementProofStatus,
   onRunMovementProof,
   onReplayChatReaction,
+  onRunIdleResetProof,
   isMovementProofRunning,
   assistantResponse,
   runtimeStatus,
@@ -147,7 +148,12 @@ export function VrmStudioPanel({
           <button className="secondary-button" type="button" onClick={onReplayChatReaction}>
             Replay chat reaction
           </button>
+          <button className="secondary-button" type="button" onClick={onRunIdleResetProof}>
+            Run idle reset proof
+          </button>
         </div>
+        <p className="mono">Idle reset proof</p>
+        <p>Response pose settles back to a calm idle baseline after mouth/test-audio playback.</p>
       </div>
     </section>
   )
