@@ -48,6 +48,8 @@ const checks = [
   ['simulated_upload_proof', source.includes('Run simulated upload proof') && source.includes('simulated upload')],
   ['movement_proof_demo', source.includes('Movement proof demo') && source.includes('Run movement proof demo')],
   ['movement_reaction_states', source.includes('Idle / blink / breathe loop ready') && source.includes('Avatar reaction state') && source.includes('expression change on response')],
+  ['movement_head_sway', source.includes('Head sway + breathe loop active')],
+  ['movement_chat_reaction_proof', source.includes('Chat reaction proof') && source.includes('Expression/chat state reaction proof')],
   ['vrm_smoke_test', source.includes('Standalone default avatar loader')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],

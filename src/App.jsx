@@ -324,6 +324,8 @@ export default function App() {
           movementProofStatus={movementProofStatus}
           onRunMovementProof={handleRunMovementProof}
           isMovementProofRunning={isMovementProofRunning}
+          assistantResponse={assistantResponse}
+          runtimeStatus={runtimeStatus}
         />
       </section>
 

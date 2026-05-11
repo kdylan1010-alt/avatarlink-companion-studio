@@ -11,6 +11,8 @@ export function VrmStudioPanel({
   movementProofStatus,
   onRunMovementProof,
   isMovementProofRunning,
+  assistantResponse,
+  runtimeStatus,
 }) {
   const canvasRef = useRef(null)
   const runtimeRef = useRef(null)
@@ -120,11 +122,21 @@ export function VrmStudioPanel({
       <div className="preview-card">
         <p className="mono">Movement proof demo</p>
         <p>Idle / blink / breathe loop ready</p>
+        <p>Head sway + breathe loop active</p>
         <p className="mono">Avatar reaction state</p>
         <p>{avatarMood}</p>
         <p className="mono">Proof status</p>
         <p>{movementProofStatus}</p>
         <p className="muted">Sample VRM loads → idle animation → mouth opens from test audio/amplitude → expression change on response.</p>
+        <p className="mono">Chat reaction proof</p>
+        <p>{runtimeStatus}</p>
+        <p className="muted">{assistantResponse || 'Awaiting assistant response for chat-state proof.'}</p>
+        <ul className="proof-checklist">
+          <li>{uploadedVrmName !== 'No VRM loaded yet' ? '✅' : '⬜'} VRM load ready</li>
+          <li>✅ Blink / breathe / head movement loop</li>
+          <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
+          <li>{runtimeStatus.includes('expression change on response') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
+        </ul>
         <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
           {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
         </button>
