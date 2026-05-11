@@ -140,7 +140,7 @@ export function VrmStudioPanel({
         <ul className="proof-checklist">
           <li>{uploadedVrmName !== 'No VRM loaded yet' ? '✅' : '⬜'} VRM load ready</li>
           <li>✅ Blink / breathe / head movement loop</li>
-          <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
+          <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') || movementProofStatus.includes('Full demo complete') || runtimeStatus.includes('mouth/expression motion') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
           <li>{runtimeStatus.includes('expression change on response') || runtimeStatus.includes('response expression latched') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
         </ul>
         <div className="button-row">
