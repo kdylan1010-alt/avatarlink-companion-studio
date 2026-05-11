@@ -3,7 +3,15 @@ import { createVrmPreview } from '../lib/vrmRuntime'
 
 const SAMPLE_PATH = '/avatars/sample.vrm'
 
-export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
+export function VrmStudioPanel({
+  uploadedVrmName,
+  onUploadName,
+  mouthOpen,
+  avatarMood,
+  movementProofStatus,
+  onRunMovementProof,
+  isMovementProofRunning,
+}) {
   const canvasRef = useRef(null)
   const runtimeRef = useRef(null)
   const [renderStatus, setRenderStatus] = useState('Preview canvas booting…')
@@ -16,6 +24,7 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
       if (!canvasRef.current) return
       runtimeRef.current = await createVrmPreview(canvasRef.current)
       runtimeRef.current.setMouthOpen(mouthOpen)
+      runtimeRef.current.setAvatarMood(avatarMood)
       const result = await runtimeRef.current.loadUrl(SAMPLE_PATH)
       console.log('Default sample VRM loaded', result)
       onUploadName('sample.vrm')
@@ -40,6 +49,10 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
   useEffect(() => {
     runtimeRef.current?.setMouthOpen(mouthOpen)
   }, [mouthOpen])
+
+  useEffect(() => {
+    runtimeRef.current?.setAvatarMood(avatarMood)
+  }, [avatarMood])
 
   const loadFromFile = async (file, sourceLabel = 'upload') => {
     if (!file) return
@@ -103,6 +116,18 @@ export function VrmStudioPanel({ uploadedVrmName, onUploadName, mouthOpen }) {
         <p className="mono">Render status</p>
         <p>{renderStatus}</p>
         <p className="muted">{meta}</p>
+      </div>
+      <div className="preview-card">
+        <p className="mono">Movement proof demo</p>
+        <p>Idle / blink / breathe loop ready</p>
+        <p className="mono">Avatar reaction state</p>
+        <p>{avatarMood}</p>
+        <p className="mono">Proof status</p>
+        <p>{movementProofStatus}</p>
+        <p className="muted">Sample VRM loads → idle animation → mouth opens from test audio/amplitude → expression change on response.</p>
+        <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
+          {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
+        </button>
       </div>
     </section>
   )

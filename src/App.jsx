@@ -98,6 +98,9 @@ export default function App() {
   const [assistantResponse, setAssistantResponse] = useState('')
   const [runtimeStatus, setRuntimeStatus] = useState('Waiting for a real or demo companion run')
   const [runtimeProviderLabel, setRuntimeProviderLabel] = useState('demo mode not run yet')
+  const [avatarMood, setAvatarMood] = useState('idle')
+  const [movementProofStatus, setMovementProofStatus] = useState('Idle / blink / breathe loop ready')
+  const [isMovementProofRunning, setIsMovementProofRunning] = useState(false)
   const [voiceProvider, setVoiceProvider] = useState('browser-speech')
   const [voiceId, setVoiceId] = useState('browser-default')
   const [speechStatus, setSpeechStatus] = useState('Browser speech fallback ready')
@@ -149,6 +152,7 @@ export default function App() {
 
   const handlePlayTimeline = () => {
     cancelPlaybackRef.current?.()
+    setAvatarMood('speaking')
     setPlaybackStatus(`Playing viseme timeline preview from ${ttsFrameBridge.source}`)
     cancelPlaybackRef.current = playVisemeTimeline(visemeTimeline, (frame) => {
       setMouthOpen(frame.mouthOpen)
@@ -157,6 +161,7 @@ export default function App() {
     const totalMs = Math.max(ttsFrameBridge.frameMs, visemeTimeline.length * ttsFrameBridge.frameMs + 20)
     window.setTimeout(() => {
       setPlaybackStatus('Playback complete — ready to map real or demo speech frames')
+      setAvatarMood('idle')
     }, totalMs)
   }
 
@@ -166,6 +171,7 @@ export default function App() {
 
   const speakWithFallback = (text) => {
     cancelPlaybackRef.current?.()
+    setAvatarMood('speaking')
     const timeline = buildSpeechFrames(text)
     cancelPlaybackRef.current = playVisemeTimeline(timeline, (frame) => {
       setMouthOpen(frame.mouthOpen)
@@ -174,11 +180,15 @@ export default function App() {
 
     if (voiceProvider !== 'browser-speech') {
       setSpeechStatus('Provider API TODO selected — lip-sync demo ran without browser speech audio')
+      window.setTimeout(() => setAvatarMood('celebrate'), 160)
+      window.setTimeout(() => setAvatarMood('idle'), 1100)
       return
     }
 
     if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
       setSpeechStatus('Browser speech unavailable — ran lip-sync demo without audio')
+      window.setTimeout(() => setAvatarMood('celebrate'), 160)
+      window.setTimeout(() => setAvatarMood('idle'), 1100)
       return
     }
 
@@ -194,14 +204,44 @@ export default function App() {
     utterance.onend = () => {
       setSpeechStatus(`Browser speech completed via ${voiceMatch?.label || 'browser-default'}`)
       setPlaybackStatus('Speech complete — avatar returned to idle')
+      setAvatarMood('celebrate')
       setMouthOpen(0.12)
+      window.setTimeout(() => setAvatarMood('idle'), 1000)
     }
     utterance.onerror = (event) => setSpeechStatus(`Browser speech error: ${event.error || 'unknown'}`)
     window.speechSynthesis.speak(utterance)
   }
 
+  const handleRunMovementProof = () => {
+    cancelPlaybackRef.current?.()
+    setIsMovementProofRunning(true)
+    setAvatarMood('listening')
+    setMovementProofStatus('Movement proof running: sample VRM loaded, idle/breathe active, amplitude test opening mouth')
+    setRuntimeStatus('Movement proof demo running from local amplitude frames')
+    setRuntimeProviderLabel('movement-proof:local-amplitude')
+    setAssistantResponse('Movement proof response: sample VRM idled, speech frames opened the mouth, and the avatar switched into a response reaction pose.')
+
+    const proofTimeline = buildVisemeTimeline([0.1, 0.2, 0.58, 0.24, 0.68, 0.3, 0.78, 0.22, 0.12])
+    cancelPlaybackRef.current = playVisemeTimeline(proofTimeline, (frame) => {
+      setMouthOpen(frame.mouthOpen)
+      setAvatarMood(frame.mouthOpen > 0.45 ? 'speaking' : 'listening')
+      setPlaybackStatus(`Movement proof frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 120)
+
+    const totalMs = proofTimeline.length * 120 + 40
+    window.setTimeout(() => {
+      setAvatarMood('celebrate')
+      setMovementProofStatus('Movement proof complete — idle/breathe + mouth-open test + expression change on response')
+      setRuntimeStatus('Movement proof complete — expression change on response visible')
+      setPlaybackStatus('Movement proof complete — avatar returned to reactive idle')
+      window.setTimeout(() => setAvatarMood('idle'), 1000)
+      setIsMovementProofRunning(false)
+    }, totalMs)
+  }
+
   const handleRunCompanion = async () => {
     setIsRunning(true)
+    setAvatarMood('listening')
     setRuntimeStatus('Running companion request…')
     try {
       let responseText = ''
@@ -251,6 +291,7 @@ export default function App() {
       setRuntimeStatus(`Runtime call failed: ${error.message}`)
       setRuntimeProviderLabel(`${providerMeta.id}:live-call-failed`)
       setAssistantResponse('')
+      setAvatarMood('idle')
     } finally {
       setIsRunning(false)
     }
@@ -279,6 +320,10 @@ export default function App() {
           uploadedVrmName={uploadedVrmName}
           onUploadName={setUploadedVrmName}
           mouthOpen={mouthOpen}
+          avatarMood={avatarMood}
+          movementProofStatus={movementProofStatus}
+          onRunMovementProof={handleRunMovementProof}
+          isMovementProofRunning={isMovementProofRunning}
         />
       </section>
 
