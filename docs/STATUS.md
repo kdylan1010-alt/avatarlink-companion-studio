@@ -8,45 +8,27 @@
 - Current Pages result: `404 page not found`
 
 ## Latest shipped artifact
-- Commit before this status update: `a51192c834fd28ff2725842314b691f480ee740e`
-- Artifact: safe model-provider scaffold with OpenRouter / Gemini / Ollama / official OpenAI selector, OAuth-ready connector placeholder, and no-secret provider notes on top of the end-to-end companion demo flow.
+- Commit: `9c7124a1387b17846a2b449eb81ec0bfcdfc3ed3`
+- Repo URL: `https://github.com/kdylan1010-alt/avatarlink-companion-studio/commit/9c7124a1387b17846a2b449eb81ec0bfcdfc3ed3`
+- Artifact: end-to-end full demo pipeline with `Run full demo`, `Mock / test mode`, sample VRM default loader, browser-speech fallback, and mouth/expression motion proof.
 
 ## Latest verified proof
-- Live page title: `AvatarLink Companion Studio`
-- Delivery proof on page: `queueSize: 2` with hot + warm lead records in the bridge payload
-- Companion flow proof on page: `Model provider`, `Run companion reply`, `Voice provider`, `Voice ID / browser voice`, `Companion runtime status`, and `Last assistant response`
-- Provider-selector proof on page: `OpenRouter (OpenAI-compatible, supports :free models)`, `Gemini API key (free-tier friendly scaffold)`, `Local Ollama (dev/local)`, `Official OpenAI API key / project`, and `OAuth-ready provider connector`
-- Safe-auth copy on page: `ChatGPT Free/Plus/Pro login is not the same as OpenAI API access. Use official API key/provider key only.`
-- Debug proof on 2026-05-10: stubbed live provider branch hit `POST /chat/completions`, sent auth header + model + messages, returned `Stubbed live provider reply for wiring proof.`, updated status to `Live provider response received`, and spoke the reply via browser speech.
-
-## Run + build commands
-```bash
-cd /Users/a1111/Desktop/avatarlink-companion-studio
-/usr/local/bin/node scripts/qa-smoke.mjs
-/usr/local/bin/node ./node_modules/vite/bin/vite.js build
-python3 -m http.server 4173 -d dist
-```
+- Build: `/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js run build` → exit `0`
+- QA smoke: `/usr/local/bin/node scripts/qa-smoke.mjs` → exit `0`
+- Browser proof: `Run full demo` shows `Full demo complete — VRM + voice + provider/mock + chat + speech + mouth movement chain visible`
+- Browser proof: `Last provider path` shows `full-demo:mock`
+- Browser proof: `Loaded asset` shows `sample.vrm`
+- Browser proof: `Browser speech error: not-allowed — lip-sync demo continued without audio`
+- Screenshot: `/Users/a1111/.hermes/cache/screenshots/browser_screenshot_22d00a9a828642caaf5eea8c7cafe845.png`
 
 ## Current blocker
-- Shared delivery fallback is no longer the blocker.
-- The remaining blocker is a missing verified successful call against a real OpenAI-compatible provider with valid credentials; live authenticated provider success is not yet proven.
+- No verified live BYOK provider success has been captured yet; the shipped end-to-end proof is currently mock chat plus browser-speech fallback.
 
-## Next artifact target
-- Capture a real authenticated OpenRouter, Ollama, Gemini, or official OpenAI proof run using valid BYOK credentials/local runtime, then record the exact response path and any provider-specific error if it fails.
+## Next step already started
+- Wrote `docs/LEAD_PERSISTENCE_PLAN.md` with the practical post-localStorage path: local cache → server endpoint → Supabase/Airtable durable inbox → later webhook/CRM fan-out.
 
 ## Fallback artifact
-- Repo artifact path: `artifacts/avatarlink-companion-studio-fallback-a9df7c7.zip`
-- Local artifact path: `/Users/a1111/Desktop/avatarlink-companion-studio/artifacts/avatarlink-companion-studio-fallback-a9df7c7.zip`
-- Build artifact path: `dist/assets/index-bdP3VZfE.js`
-- Build command: `/usr/local/bin/node ./node_modules/vite/bin/vite.js build`
-- Build exit code: `0`
-
-## End-to-end demo fallback
-- Basic flow now runs in-browser with `Run companion reply`.
-- If no API key is entered, the app uses demo-local browser speech fallback and animates the avatar mouth while speaking.
-- OpenRouter is now the default safe low-cost BYOK preset; Gemini, Ollama, and official OpenAI API are selectable; OAuth remains scaffold-only.
-- Remaining real-runtime blocker: no verified live provider credential/test response has been supplied yet, so live authenticated provider success is not proven complete.
-
-## Provider docs
-- Safe provider guidance: `docs/MODEL_PROVIDERS.md`
+- Zip artifact: `/Users/a1111/Desktop/avatarlink-companion-studio/artifacts/avatarlink-companion-studio-full-demo-9c7124a.zip`
+- Provider docs: `docs/MODEL_PROVIDERS.md`
 - Env placeholders: `.env.example`
+- Lead persistence doc: `docs/LEAD_PERSISTENCE_PLAN.md`
