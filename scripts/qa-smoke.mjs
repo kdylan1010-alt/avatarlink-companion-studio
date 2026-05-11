@@ -50,6 +50,8 @@ const checks = [
   ['movement_reaction_states', source.includes('Idle / blink / breathe loop ready') && source.includes('Avatar reaction state') && source.includes('expression change on response')],
   ['movement_head_sway', source.includes('Head sway + breathe loop active')],
   ['movement_chat_reaction_proof', source.includes('Chat reaction proof') && source.includes('Expression/chat state reaction proof')],
+  ['movement_signal_ladder', source.includes('Movement signal ladder') && source.includes('VRM → blink/breathe → head sway → mouth test → response expression')],
+  ['movement_replay_button', source.includes('Replay chat reaction')],
   ['vrm_smoke_test', source.includes('Standalone default avatar loader')],
   ['preview_canvas', source.includes('VRM preview canvas') && css.includes('.preview-canvas')],
   ['amplitude_meter', css.includes('.meter-wrap')],

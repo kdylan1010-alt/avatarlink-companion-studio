@@ -239,6 +239,31 @@ export default function App() {
     }, totalMs)
   }
 
+  const handleReplayChatReaction = () => {
+    cancelPlaybackRef.current?.()
+    setAvatarMood('listening')
+    setMovementProofStatus('Replay chat reaction running: head sway primed, mouth test queued, response expression latching')
+    setRuntimeStatus('Replay chat reaction running from local movement proof controls')
+    setRuntimeProviderLabel('movement-proof:chat-replay')
+    setAssistantResponse('Replay chat reaction: avatar shifted from listening to speaking, then landed on a happy response pose.')
+
+    const replayTimeline = buildVisemeTimeline([0.14, 0.36, 0.62, 0.2, 0.52, 0.18])
+    cancelPlaybackRef.current = playVisemeTimeline(replayTimeline, (frame) => {
+      setMouthOpen(frame.mouthOpen)
+      setAvatarMood(frame.mouthOpen > 0.4 ? 'speaking' : 'listening')
+      setPlaybackStatus(`Replay chat reaction frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 140)
+
+    const totalMs = replayTimeline.length * 140 + 40
+    window.setTimeout(() => {
+      setAvatarMood('celebrate')
+      setMovementProofStatus('Replay chat reaction complete — head sway, mouth test, and response expression replayed')
+      setRuntimeStatus('Replay chat reaction complete — response expression latched after test audio')
+      setPlaybackStatus('Replay chat reaction complete — avatar returned to reactive idle')
+      window.setTimeout(() => setAvatarMood('idle'), 1000)
+    }, totalMs)
+  }
+
   const handleRunCompanion = async () => {
     setIsRunning(true)
     setAvatarMood('listening')
@@ -323,6 +348,7 @@ export default function App() {
           avatarMood={avatarMood}
           movementProofStatus={movementProofStatus}
           onRunMovementProof={handleRunMovementProof}
+          onReplayChatReaction={handleReplayChatReaction}
           isMovementProofRunning={isMovementProofRunning}
           assistantResponse={assistantResponse}
           runtimeStatus={runtimeStatus}

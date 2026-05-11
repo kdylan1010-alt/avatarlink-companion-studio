@@ -10,6 +10,7 @@ export function VrmStudioPanel({
   avatarMood,
   movementProofStatus,
   onRunMovementProof,
+  onReplayChatReaction,
   isMovementProofRunning,
   assistantResponse,
   runtimeStatus,
@@ -131,15 +132,22 @@ export function VrmStudioPanel({
         <p className="mono">Chat reaction proof</p>
         <p>{runtimeStatus}</p>
         <p className="muted">{assistantResponse || 'Awaiting assistant response for chat-state proof.'}</p>
+        <p className="mono">Movement signal ladder</p>
+        <p>VRM → blink/breathe → head sway → mouth test → response expression</p>
         <ul className="proof-checklist">
           <li>{uploadedVrmName !== 'No VRM loaded yet' ? '✅' : '⬜'} VRM load ready</li>
           <li>✅ Blink / breathe / head movement loop</li>
-          <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
-          <li>{runtimeStatus.includes('expression change on response') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
+          <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
+          <li>{runtimeStatus.includes('expression change on response') || runtimeStatus.includes('response expression latched') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
         </ul>
-        <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
-          {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
-        </button>
+        <div className="button-row">
+          <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
+            {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
+          </button>
+          <button className="secondary-button" type="button" onClick={onReplayChatReaction}>
+            Replay chat reaction
+          </button>
+        </div>
       </div>
     </section>
   )
