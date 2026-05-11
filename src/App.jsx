@@ -35,11 +35,11 @@ const PROVIDER_PRESETS = {
   },
   gemini: {
     id: 'gemini',
-    label: 'Gemini API key (free-tier friendly scaffold)',
-    apiBase: 'https://generativelanguage.googleapis.com/v1beta',
-    model: 'gemini-2.5-flash',
-    transport: 'openai-compatible',
-    authNote: 'Use a Gemini API key from Google AI Studio. This app keeps the same BYOK surface and sends OpenAI-style chat requests to the Gemini compatibility endpoint.',
+    label: 'Gemini API key via local safe proxy',
+    apiBase: 'http://127.0.0.1:8787/api/gemini',
+    model: 'gemini-2.0-flash',
+    transport: 'local-gemini-proxy',
+    authNote: 'Use a Gemini API key from Google AI Studio through the local/server proxy. The browser never needs to see the raw key.',
   },
   ollama: {
     id: 'ollama',
@@ -83,6 +83,56 @@ const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge
 const starterContract = buildProviderTtsContract({})
 const starterResponseMap = buildProviderResponseMap(starterContract)
 
+const PROVIDER_ENV_DEFAULTS = {
+  mock: {
+    apiBase: PROVIDER_PRESETS.mock.apiBase,
+    apiKey: '',
+    model: PROVIDER_PRESETS.mock.model,
+  },
+  openrouter: {
+    apiBase: import.meta.env.VITE_OPENROUTER_API_BASE || PROVIDER_PRESETS.openrouter.apiBase,
+    apiKey: import.meta.env.VITE_OPENROUTER_API_KEY || '',
+    model: import.meta.env.VITE_OPENROUTER_MODEL || PROVIDER_PRESETS.openrouter.model,
+  },
+  gemini: {
+    apiBase: import.meta.env.VITE_GEMINI_PROXY_BASE || PROVIDER_PRESETS.gemini.apiBase,
+    apiKey: '',
+    model: import.meta.env.VITE_GEMINI_MODEL || PROVIDER_PRESETS.gemini.model,
+  },
+  ollama: {
+    apiBase: import.meta.env.VITE_OLLAMA_API_BASE || PROVIDER_PRESETS.ollama.apiBase,
+    apiKey: import.meta.env.VITE_OLLAMA_API_KEY || '',
+    model: import.meta.env.VITE_OLLAMA_MODEL || PROVIDER_PRESETS.ollama.model,
+  },
+  openai: {
+    apiBase: import.meta.env.VITE_OPENAI_API_BASE || PROVIDER_PRESETS.openai.apiBase,
+    apiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
+    model: import.meta.env.VITE_OPENAI_MODEL || PROVIDER_PRESETS.openai.model,
+  },
+  oauthReady: {
+    apiBase: PROVIDER_PRESETS.oauthReady.apiBase,
+    apiKey: '',
+    model: PROVIDER_PRESETS.oauthReady.model,
+  },
+}
+
+function getProviderRuntimeDefaults(providerId) {
+  return PROVIDER_ENV_DEFAULTS[providerId] || PROVIDER_ENV_DEFAULTS.mock
+}
+
+function buildProviderSelectedStatus(providerId, label, hasLocalKey) {
+  if (providerId === 'oauthReady') {
+    return 'OAuth-ready connector scaffold selected — mocked until an official provider OAuth path is confirmed'
+  }
+  if (providerId === 'gemini') {
+    return `Provider preset selected: ${label}. Real calls go through the local/server Gemini proxy so the API key stays out of the browser bundle.`
+  }
+  if (hasLocalKey) {
+    return `Provider preset selected: ${label}. Local BYOK key detected from ignored env only.`
+  }
+  return `Provider preset selected: ${label}`
+}
+
 function buildDemoReply(persona, userPrompt) {
   return `${persona.name}: I heard “${userPrompt}.” Let's turn that into a flirty companion moment: greet the fan warmly, tease one premium perk, and invite them into a private follow-up scene.`
 }
@@ -93,12 +143,92 @@ function buildSpeechFrames(text) {
   return buildVisemeTimeline(values)
 }
 
+async function requestCompanionResponse({
+  modelProvider,
+  providerMeta,
+  persona,
+  userPrompt,
+  systemPromptPreview,
+  apiBase,
+  apiKey,
+  model,
+}) {
+  if (modelProvider === 'mock' || modelProvider === 'oauthReady') {
+    return {
+      text: buildDemoReply(persona, userPrompt),
+      label: modelProvider === 'mock' ? 'mock' : 'oauth-ready-mock',
+      status: `Running via ${providerMeta.label}`,
+      live: false,
+    }
+  }
+
+  if (modelProvider === 'gemini') {
+    const response = await fetch(`${apiBase.replace(/\/$/, '')}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, systemPrompt: systemPromptPreview, userPrompt }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (response.ok && data?.text) {
+      return {
+        text: data.text.trim(),
+        label: `live-gemini:${data.model || model}`,
+        status: `Live Gemini response received through safe local proxy (${data.model || model})`,
+        live: true,
+      }
+    }
+    const fallbackText = data?.fallbackText || buildDemoReply(persona, userPrompt)
+    const reason = data?.message || data?.error || `Gemini proxy HTTP ${response.status}`
+    return {
+      text: fallbackText,
+      label: `fallback-gemini:${data?.code || response.status}`,
+      status: `Gemini blocked (${reason}); full avatar chain continued with local fallback speech/movement`,
+      live: false,
+    }
+  }
+
+  const canAttemptLive = modelProvider === 'ollama' || Boolean(apiKey.trim())
+  if (!canAttemptLive) {
+    return {
+      text: buildDemoReply(persona, userPrompt),
+      label: `fallback-${providerMeta.id}`,
+      status: `Fallback mock because no live key was provided for ${providerMeta.label}`,
+      live: false,
+    }
+  }
+
+  const headers = { 'Content-Type': 'application/json' }
+  if (apiKey.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`
+  const response = await fetch(`${apiBase.replace(/\/$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPromptPreview },
+        { role: 'user', content: userPrompt },
+      ],
+    }),
+  })
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`API ${response.status}: ${errorText.slice(0, 220)}`)
+  }
+  const data = await response.json()
+  return {
+    text: data?.choices?.[0]?.message?.content?.trim() || 'Empty provider response',
+    label: `live-${providerMeta.id}:${model}`,
+    status: `Live provider response received via ${providerMeta.label}`,
+    live: true,
+  }
+}
+
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
   const [modelProvider, setModelProvider] = useState('mock')
-  const [apiBase, setApiBase] = useState(PROVIDER_PRESETS.mock.apiBase)
-  const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState(PROVIDER_PRESETS.mock.model)
+  const [apiBase, setApiBase] = useState(getProviderRuntimeDefaults('mock').apiBase)
+  const [apiKey, setApiKey] = useState(getProviderRuntimeDefaults('mock').apiKey)
+  const [model, setModel] = useState(getProviderRuntimeDefaults('mock').model)
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
@@ -147,15 +277,14 @@ export default function App() {
 
   const handleProviderChange = (nextProvider) => {
     const preset = PROVIDER_PRESETS[nextProvider]
+    const runtimeDefaults = getProviderRuntimeDefaults(nextProvider)
+    const hasLocalKey = Boolean(runtimeDefaults.apiKey?.trim())
     setModelProvider(nextProvider)
-    setApiBase(preset.apiBase)
-    setModel(preset.model)
+    setApiBase(runtimeDefaults.apiBase)
+    setApiKey(runtimeDefaults.apiKey)
+    setModel(runtimeDefaults.model)
     setRuntimeProviderLabel(`${preset.id}:${preset.transport}`)
-    if (nextProvider === 'oauthReady') {
-      setRuntimeStatus('OAuth-ready connector scaffold selected — mocked until an official provider OAuth path is confirmed')
-    } else {
-      setRuntimeStatus(`Provider preset selected: ${preset.label}`)
-    }
+    setRuntimeStatus(buildProviderSelectedStatus(nextProvider, preset.label, hasLocalKey))
   }
 
   const handlePlayTimeline = () => {
@@ -348,41 +477,19 @@ export default function App() {
     setRuntimeStatus('Full demo pipeline running: preparing provider/mock response')
     setPlaybackStatus('Full demo pipeline armed — waiting for response text and speech frames')
     try {
-      let responseText = ''
-      let providerLabel = ''
-      const canAttemptLive = modelProvider === 'ollama' || Boolean(apiKey.trim())
-
-      if (modelProvider === 'mock' || modelProvider === 'oauthReady') {
-        responseText = buildDemoReply(persona, userPrompt)
-        providerLabel = modelProvider === 'mock' ? 'full-demo:mock' : 'full-demo:oauth-ready-mock'
-        setRuntimeStatus(`Full demo pipeline running via ${providerMeta.label}`)
-      } else if (canAttemptLive) {
-        const headers = { 'Content-Type': 'application/json' }
-        if (apiKey.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`
-        const response = await fetch(`${apiBase.replace(/\/$/, '')}/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemPromptPreview },
-              { role: 'user', content: userPrompt },
-            ],
-          }),
-        })
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`API ${response.status}: ${errorText.slice(0, 220)}`)
-        }
-        const data = await response.json()
-        responseText = data?.choices?.[0]?.message?.content?.trim() || 'Empty provider response'
-        providerLabel = `full-demo:live-${providerMeta.id}:${model}`
-        setRuntimeStatus(`Full demo pipeline running via live ${providerMeta.label}`)
-      } else {
-        responseText = buildDemoReply(persona, userPrompt)
-        providerLabel = `full-demo:fallback-${providerMeta.id}`
-        setRuntimeStatus(`Full demo pipeline running via fallback mock because no live key was provided for ${providerMeta.label}`)
-      }
+      const providerResult = await requestCompanionResponse({
+        modelProvider,
+        providerMeta,
+        persona,
+        userPrompt,
+        systemPromptPreview,
+        apiBase,
+        apiKey,
+        model,
+      })
+      const responseText = providerResult.text
+      const providerLabel = `full-demo:${providerResult.label}`
+      setRuntimeStatus(`Full demo pipeline: ${providerResult.status}`)
 
       setAssistantResponse(responseText)
       setRuntimeProviderLabel(providerLabel)
@@ -405,45 +512,19 @@ export default function App() {
     setAvatarMood('listening')
     setRuntimeStatus('Running companion request…')
     try {
-      let responseText = ''
-      let providerLabel = ''
-      const canAttemptLive = modelProvider === 'ollama' || Boolean(apiKey.trim())
-
-      if (modelProvider === 'oauthReady') {
-        responseText = buildDemoReply(persona, userPrompt)
-        providerLabel = 'oauth-ready-mock'
-        setRuntimeStatus('OAuth-ready connector scaffold selected — mocked until an official provider OAuth path is confirmed')
-      } else if (canAttemptLive) {
-        const headers = {
-          'Content-Type': 'application/json',
-        }
-        if (apiKey.trim()) {
-          headers.Authorization = `Bearer ${apiKey.trim()}`
-        }
-        const response = await fetch(`${apiBase.replace(/\/$/, '')}/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: systemPromptPreview },
-              { role: 'user', content: userPrompt },
-            ],
-          }),
-        })
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`API ${response.status}: ${errorText.slice(0, 220)}`)
-        }
-        const data = await response.json()
-        responseText = data?.choices?.[0]?.message?.content?.trim() || 'Empty provider response'
-        providerLabel = `live-${providerMeta.id}:${model}`
-        setRuntimeStatus(`Live provider response received via ${providerMeta.label}`)
-      } else {
-        responseText = buildDemoReply(persona, userPrompt)
-        providerLabel = 'demo-local-browser-speech'
-        setRuntimeStatus('Demo mode reply rendered with browser speech fallback')
-      }
+      const providerResult = await requestCompanionResponse({
+        modelProvider,
+        providerMeta,
+        persona,
+        userPrompt,
+        systemPromptPreview,
+        apiBase,
+        apiKey,
+        model,
+      })
+      const responseText = providerResult.text
+      const providerLabel = providerResult.label
+      setRuntimeStatus(providerResult.status)
 
       setAssistantResponse(responseText)
       setRuntimeProviderLabel(providerLabel)

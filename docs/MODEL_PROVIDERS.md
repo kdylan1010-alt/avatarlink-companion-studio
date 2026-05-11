@@ -18,13 +18,15 @@ AvatarLink uses a **safe BYOK provider abstraction**. It does **not** use ChatGP
   - Choose a current `:free` model from the OpenRouter catalog when available.
   - Good first choice for low-cost browser demos.
 
-### 2) Gemini API key (free-tier friendly scaffold)
-- Base URL: `https://generativelanguage.googleapis.com/v1beta`
-- Safe path: BYOK Gemini API key from Google AI Studio
-- MVP status: **scaffolded in the provider selector**
+### 2) Gemini API key via local/server proxy
+- Browser base URL: `http://127.0.0.1:8787/api/gemini`
+- Server upstream: `https://generativelanguage.googleapis.com/v1beta`
+- Safe path: BYOK Gemini API key from Google AI Studio stored only in `.env.local` as `GEMINI_API_KEY`
+- MVP status: **wired through `scripts/gemini-proxy.mjs`**
 - Notes:
-  - Uses the same OpenAI-style chat surface in this MVP.
-  - Keep test claims honest until a real authenticated success response is captured.
+  - The browser calls the local/server proxy, not Google directly with a raw key.
+  - The current saved key is recognized by `models.list`, but `generateContent` is blocked by Google project/quota errors, so the UI keeps the full avatar chain moving with fallback text.
+  - A fresh Google project/key with Generate Content quota/billing or support access should work without changing the AvatarLink UI.
 
 ### 3) Local Ollama (dev/local)
 - Base URL: `http://localhost:11434/v1`
@@ -58,7 +60,7 @@ AvatarLink uses a **safe BYOK provider abstraction**. It does **not** use ChatGP
 ## Env placeholders
 See `.env.example` for placeholder values only:
 - `VITE_OPENROUTER_API_BASE`
-- `VITE_GEMINI_API_BASE`
+- `VITE_GEMINI_PROXY_BASE`
 - `VITE_OLLAMA_API_BASE`
 - `VITE_OPENAI_API_BASE`
 - `VITE_PROVIDER_OAUTH_CALLBACK_URL`
@@ -70,6 +72,8 @@ See `.env.example` for placeholder values only:
   - **OpenRouter BYOK**
   - **Local Ollama**
   - **Official OpenAI API key**
-- Scaffold-only / not yet proven live in this session:
-  - **Gemini authenticated success**
+- Wired but externally blocked in this session:
+  - **Gemini generateContent** — key recognized by `models.list`; generation returns Google-side `PROJECT_DENIED_ACCESS` / `QUOTA_EXCEEDED`
   - **OAuth-ready provider connector**
+
+- Place the real Gemini key only in a local ignored env file such as `.env.local` using `GEMINI_API_KEY`. Never commit the real key or expose it through `VITE_` frontend env variables.

@@ -12,6 +12,7 @@ const source = [
   '../src/components/VoicePanel.jsx',
 ].map((path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 const css = fs.readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8')
+const envExample = fs.readFileSync(new URL('../.env.example', import.meta.url), 'utf8')
 
 const checks = [
   ['title', html.includes('AvatarLink Companion Studio')],
@@ -34,10 +35,14 @@ const checks = [
   ['voice_selector', source.includes('Voice provider') && source.includes('Voice ID / browser voice')],
   ['runtime_status_panel', source.includes('Companion runtime status') && source.includes('Last assistant response')],
 
-  ['provider_selector', source.includes('Model provider') && source.includes('Mock / test mode (no paid key required)') && source.includes('OpenRouter (OpenAI-compatible, supports :free models)') && source.includes('Gemini API key (free-tier friendly scaffold)') && source.includes('Local Ollama (dev/local)') && source.includes('Official OpenAI API key / project')],
+  ['provider_selector', source.includes('Model provider') && source.includes('Mock / test mode (no paid key required)') && source.includes('OpenRouter (OpenAI-compatible, supports :free models)') && source.includes('Gemini API key via local safe proxy') && source.includes('Local Ollama (dev/local)') && source.includes('Official OpenAI API key / project')],
   ['oauth_ready_scaffold', source.includes('OAuth-ready provider connector') && source.includes('Mocked until an official provider OAuth path is confirmed')],
   ['no_chatgpt_session_copy', source.includes('ChatGPT Free/Plus/Pro login is not the same as OpenAI API access') && source.includes('Use official API key/provider key only')],
   ['provider_docs_reference', source.includes('docs/MODEL_PROVIDERS.md')],
+  ['gemini_env_placeholder', envExample.includes('VITE_GEMINI_PROXY_BASE=http://127.0.0.1:8787/api/gemini') && envExample.includes('GEMINI_API_KEY belongs in .env.local only')],
+  ['gemini_env_runtime', source.includes('Real calls go through the local/server Gemini proxy so the API key stays out of the browser bundle.')],
+  ['gemini_openai_compat_base', source.includes('http://127.0.0.1:8787/api/gemini')],
+  ['gemini_secret_safe_stub', source.includes('full avatar chain continued with local fallback speech/movement')],
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],
   ['lead_dashboard', source.includes('Recent pilot leads')],
   ['lead_persistence', source.includes('localStorage') && source.includes('Export leads CSV')],

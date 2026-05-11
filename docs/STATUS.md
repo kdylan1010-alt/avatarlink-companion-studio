@@ -32,3 +32,10 @@
 - Provider docs: `docs/MODEL_PROVIDERS.md`
 - Env placeholders: `.env.example`
 - Lead persistence doc: `docs/LEAD_PERSISTENCE_PLAN.md`
+
+## Gemini provider proof update
+
+- Added `scripts/gemini-proxy.mjs` so Gemini calls use a local/server env key instead of exposing the raw API key in the browser.
+- `.env.local` holds `GEMINI_API_KEY` and is gitignored. `.env.example` remains placeholders only.
+- Current key check: `models.list` succeeds, proving the key is recognized, but `generateContent` returns Google-side access/quota failures (`PROJECT_DENIED_ACCESS` / `QUOTA_EXCEEDED` depending on model).
+- Product fallback: AvatarLink continues the full VRM → chat → voice/audio → mouth/body movement demo with local fallback text when Gemini is externally blocked.
