@@ -291,6 +291,32 @@ export default function App() {
     }, totalMs)
   }
 
+
+  const handleRunMouthAmplitudeProof = () => {
+    cancelPlaybackRef.current?.()
+    setAvatarMood('speaking')
+    setMovementProofStatus('Mouth amplitude proof running: focused mouth-open test driven by audio amplitude frames')
+    setRuntimeStatus('Mouth amplitude proof running from local movement controls')
+    setRuntimeProviderLabel('movement-proof:mouth-amplitude')
+    setAssistantResponse('Mouth amplitude proof: amplitude frames drove the mouth while the avatar held a speaking/listening cycle.')
+    setPlaybackStatus('Mouth amplitude proof armed — stepping through audio amplitude frames')
+
+    const amplitudeTimeline = buildVisemeTimeline([0.06, 0.18, 0.42, 0.71, 0.54, 0.29, 0.11])
+    cancelPlaybackRef.current = playVisemeTimeline(amplitudeTimeline, (frame) => {
+      setMouthOpen(frame.mouthOpen)
+      setAvatarMood(frame.mouthOpen > 0.32 ? 'speaking' : 'listening')
+      setPlaybackStatus(`Mouth amplitude proof frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 130)
+
+    const totalMs = amplitudeTimeline.length * 130 + 60
+    window.setTimeout(() => {
+      setAvatarMood('listening')
+      setMovementProofStatus('Mouth amplitude proof complete — audio/amplitude mouth-open proof is visibly driven in the rig')
+      setRuntimeStatus('Mouth amplitude proof complete — mouth followed amplitude frames before settling')
+      setPlaybackStatus('Mouth amplitude proof complete — amplitude-driven mouth cycle finished')
+    }, totalMs)
+  }
+
   const handleRunCompanion = async () => {
     setIsRunning(true)
     setAvatarMood('listening')
@@ -377,6 +403,7 @@ export default function App() {
           onRunMovementProof={handleRunMovementProof}
           onReplayChatReaction={handleReplayChatReaction}
           onRunIdleResetProof={handleRunIdleResetProof}
+          onRunMouthAmplitudeProof={handleRunMouthAmplitudeProof}
           isMovementProofRunning={isMovementProofRunning}
           assistantResponse={assistantResponse}
           runtimeStatus={runtimeStatus}

@@ -12,6 +12,7 @@ export function VrmStudioPanel({
   onRunMovementProof,
   onReplayChatReaction,
   onRunIdleResetProof,
+  onRunMouthAmplitudeProof,
   isMovementProofRunning,
   assistantResponse,
   runtimeStatus,
@@ -151,9 +152,14 @@ export function VrmStudioPanel({
           <button className="secondary-button" type="button" onClick={onRunIdleResetProof}>
             Run idle reset proof
           </button>
+          <button className="secondary-button" type="button" onClick={onRunMouthAmplitudeProof}>
+            Run mouth amplitude proof
+          </button>
         </div>
         <p className="mono">Idle reset proof</p>
         <p>Response pose settles back to a calm idle baseline after mouth/test-audio playback.</p>
+        <p className="mono">Mouth amplitude proof</p>
+        <p>Dedicated amplitude frames visibly drive mouth-open values before easing back into the listening state.</p>
       </div>
     </section>
   )
