@@ -3,26 +3,27 @@
 ## Current delivery surface
 - Repo: https://github.com/kdylan1010-alt/avatarlink-companion-studio
 - Local path: `/Users/a1111/Desktop/avatarlink-companion-studio`
-- Live local demo: `http://127.0.0.1:4173/`
+- Live local demo: `http://127.0.0.1:8008/`
 - GitHub Pages target: `https://kdylan1010-alt.github.io/avatarlink-companion-studio/`
 - Current Pages result: `404 page not found`
 
 ## Latest shipped artifact
-- Commit: `9c7124a1387b17846a2b449eb81ec0bfcdfc3ed3`
-- Repo URL: `https://github.com/kdylan1010-alt/avatarlink-companion-studio/commit/9c7124a1387b17846a2b449eb81ec0bfcdfc3ed3`
-- Artifact: end-to-end full demo pipeline with `Run full demo`, `Mock / test mode`, sample VRM default loader, browser-speech fallback, and mouth/expression motion proof.
+- Commit: `11be91b`
+- Repo URL: `https://github.com/kdylan1010-alt/avatarlink-companion-studio/commit/11be91b`
+- Artifact: safe Gemini backend-proxy fallback plus existing `Run full demo` Mock proof path for VRM + chat + voice/audio fallback + mouth/expression movement.
 
 ## Latest verified proof
-- Build: `/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js run build` → exit `0`
-- QA smoke: `/usr/local/bin/node scripts/qa-smoke.mjs` → exit `0`
-- Browser proof: `Run full demo` shows `Full demo complete — VRM + voice + provider/mock + chat + speech + mouth movement chain visible`
-- Browser proof: `Last provider path` shows `full-demo:mock`
-- Browser proof: `Loaded asset` shows `sample.vrm`
-- Browser proof: `Browser speech error: not-allowed — lip-sync demo continued without audio`
-- Screenshot: `/Users/a1111/.hermes/cache/screenshots/browser_screenshot_22d00a9a828642caaf5eea8c7cafe845.png`
+- Build: `npm run build` → exit `0`
+- QA smoke: `node scripts/qa-smoke.mjs` → exit `0`
+- Gemini proxy health: `GET http://127.0.0.1:8787/api/gemini/health` → `200` with `{"ok":true,"hasKey":true,"keyExposed":false}`
+- Mock browser proof at `http://127.0.0.1:8008/`: `Run full demo` shows `Full demo complete — VRM + voice + provider/mock + chat + speech + mouth movement chain visible`
+- Mock browser proof: `Last provider path` shows `full-demo:mock`
+- Mock browser proof: `Loaded asset` shows `sample.vrm` and `VRM loaded`
+- Mock browser proof: `Browser speech error: not-allowed — lip-sync demo continued without audio`
 
 ## Current blocker
-- No verified live BYOK provider success has been captured yet; the shipped end-to-end proof is currently mock chat plus browser-speech fallback.
+- Gemini live generation is externally blocked. Current proxy generate result is HTTP `429` with code `QUOTA_EXCEEDED`, including `You exceeded your current quota, please check your plan and billing details` and free-tier quota-limit lines for `gemini-2.0-flash`.
+- No ChatGPT browser/session/cookie scraping is used; Gemini remains backend-env-only through the local proxy.
 
 ## Next step already started
 - Wrote `docs/LEAD_PERSISTENCE_PLAN.md` with the practical post-localStorage path: local cache → server endpoint → Supabase/Airtable durable inbox → later webhook/CRM fan-out.
@@ -37,5 +38,7 @@
 
 - Added `scripts/gemini-proxy.mjs` so Gemini calls use a local/server env key instead of exposing the raw API key in the browser.
 - `.env.local` holds `GEMINI_API_KEY` and is gitignored. `.env.example` remains placeholders only.
-- Current key check: `models.list` succeeds, proving the key is recognized, but `generateContent` returns Google-side access/quota failures (`PROJECT_DENIED_ACCESS` / `QUOTA_EXCEEDED` depending on model).
-- Product fallback: AvatarLink continues the full VRM → chat → voice/audio → mouth/body movement demo with local fallback text when Gemini is externally blocked.
+- Safe-env proof remains current: env names present are `VITE_GEMINI_API_BASE`, `VITE_GEMINI_MODEL`, and `GEMINI_API_KEY`, while `VITE_GEMINI_API_KEY` is absent.
+- Secret scan remains clean outside the ignored local env file.
+- Current Gemini classification: quota-blocked provider lane, not a frontend/CORS/secret issue.
+- Current product proof lane: keep Mock full-chain demo as the visible shipped proof until a live approved provider succeeds.
