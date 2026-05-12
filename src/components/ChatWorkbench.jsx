@@ -41,7 +41,7 @@ export function ChatWorkbench({
         <p className="muted">{providerMeta.authNote}</p>
         <p className="muted">ChatGPT Free/Plus/Pro login is not the same as OpenAI API access. Use official API key/provider key only.</p>
         <p className="muted">OAuth-ready provider connector is a generic placeholder only. Mocked until an official provider OAuth path is confirmed.</p>
-        <p className="muted">No secrets in frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
+        <p className="muted">OpenAI-compatible base URL providers are supported, but no secrets go into frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
       </div>
       <div className="stack">
         <label>Provider/proxy base URL (OpenAI-compatible base URL for BYOK providers)<input value={apiBase} onChange={(e) => onApiBase(e.target.value)} spellCheck="false" /></label>
