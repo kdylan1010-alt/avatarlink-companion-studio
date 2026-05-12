@@ -220,6 +220,15 @@ const server = http.createServer(async (req, res) => {
   jsonResponse(res, 404, { ok: false, message: 'Not found' })
 })
 
+server.on('error', (error) => {
+  if (error?.code === 'EADDRINUSE') {
+    console.error(`AvatarLink safe model proxy already appears to be running on http://127.0.0.1:${PORT}`)
+    process.exit(0)
+  }
+  console.error(`AvatarLink safe model proxy failed: ${redactSecretText(error?.message || error)}`)
+  process.exit(1)
+})
+
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`AvatarLink safe model proxy listening on http://127.0.0.1:${PORT}`)
   console.log(`Gemini key loaded: ${Boolean(process.env.GEMINI_API_KEY)} (secret not printed)`)

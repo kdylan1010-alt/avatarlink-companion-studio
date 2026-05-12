@@ -1,3 +1,15 @@
+const SAFE_PROXY_PROVIDERS = new Set(['githubModels', 'gemini'])
+
+const MODEL_SUGGESTIONS = {
+  githubModels: ['openai/gpt-4.1-mini', 'openai/gpt-4o-mini', 'openai/o4-mini'],
+  gemini: ['gemini-2.0-flash', 'gemini-1.5-flash'],
+  openrouter: ['openrouter/auto', 'meta-llama/llama-3.1-8b-instruct:free'],
+  openai: ['gpt-4o-mini', 'gpt-4.1-mini'],
+  ollama: ['llama3.2', 'mistral'],
+  mock: ['avatarlink-mock'],
+  oauthReady: ['provider-oauth-placeholder-model'],
+}
+
 export function ChatWorkbench({
   persona,
   modelProvider,
@@ -18,6 +30,10 @@ export function ChatWorkbench({
   runtimeProviderLabel,
   isRunning,
 }) {
+  const isSafeProxy = SAFE_PROXY_PROVIDERS.has(modelProvider)
+  const modelSuggestions = MODEL_SUGGESTIONS[modelProvider] || []
+  const proxyHealthPath = isSafeProxy ? `${apiBase.replace(/\/$/, '')}/health` : 'not required for browser BYOK/mock providers'
+
   return (
     <section className="panel human-card" data-testid="chat-workbench">
       <div className="section-head">
@@ -42,11 +58,20 @@ export function ChatWorkbench({
         <p className="muted">ChatGPT Free/Plus/Pro login is not the same as OpenAI API access. Use official API key/provider key only.</p>
         <p className="muted">OAuth-ready provider connector is a generic placeholder only. Mocked until an official provider OAuth path is confirmed.</p>
         <p className="muted">OpenAI-compatible base URL providers are supported, but no secrets go into frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
+        {isSafeProxy && (
+          <p className="muted">Safe proxy selected: keep the proxy running locally, load secrets from ignored .env.local, then use the health/generate endpoints below. The token is never entered in this browser UI.</p>
+        )}
       </div>
       <div className="stack">
         <label>Provider/proxy base URL (OpenAI-compatible base URL for BYOK providers)<input value={apiBase} onChange={(e) => onApiBase(e.target.value)} spellCheck="false" /></label>
-        <label>API key (OpenAI-compatible browser BYOK only; hidden for safe proxy providers)<input value={apiKey} onChange={(e) => onApiKey(e.target.value)} placeholder="leave blank for GitHub Models/Gemini proxy" type="password" spellCheck="false" /></label>
-        <label>Model<input value={model} onChange={(e) => onModel(e.target.value)} spellCheck="false" /></label>
+        {!isSafeProxy && (
+          <label>API key (OpenAI-compatible browser BYOK only)<input value={apiKey} onChange={(e) => onApiKey(e.target.value)} placeholder="paste only official provider API keys for BYOK providers" type="password" spellCheck="false" /></label>
+        )}
+        {isSafeProxy && <p className="muted">API key field hidden for safe proxy providers; use server-side .env.local only.</p>}
+        <label>Model<input value={model} onChange={(e) => onModel(e.target.value)} list="avatarlink-model-suggestions" spellCheck="false" /></label>
+        <datalist id="avatarlink-model-suggestions">
+          {modelSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+        </datalist>
       </div>
       <div className="preview-card">
         <p className="mono">Provider connector status</p>
@@ -56,7 +81,8 @@ export function ChatWorkbench({
   transport: '${providerMeta.transport}',
   baseUrl: '${apiBase}',
   model: '${model}',
-  secretPath: '${modelProvider === 'githubModels' || modelProvider === 'gemini' ? '.env.local server-side only' : 'browser BYOK only if entered'}'
+  secretPath: '${isSafeProxy ? '.env.local server-side only' : 'browser BYOK only if entered'}',
+  healthCheck: '${proxyHealthPath}'
 }`}</pre>
       </div>
       <div className="preview-card">

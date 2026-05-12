@@ -34,6 +34,8 @@ const checks = [
   ['demo_runtime_mode', source.includes('Demo mode + browser speech fallback')],
   ['voice_selector', source.includes('Voice provider') && source.includes('Voice ID / browser voice')],
   ['runtime_status_panel', source.includes('Companion runtime status') && source.includes('Last assistant response')],
+  ['github_models_proxy_default', source.includes('GitHub Models (safe local proxy, recommended)') && source.includes('openai/gpt-4.1-mini') && source.includes('Safe proxy selected')],
+  ['safe_proxy_key_hidden', source.includes('API key field hidden for safe proxy providers') && source.includes('.env.local server-side only')],
 
   ['provider_selector', source.includes('Model provider') && source.includes('Mock / test mode (no paid key required)') && source.includes('OpenRouter (OpenAI-compatible, supports :free models)') && source.includes('Gemini API key via local safe proxy') && source.includes('Local Ollama (dev/local)') && source.includes('Official OpenAI API key / project')],
   ['oauth_ready_scaffold', source.includes('OAuth-ready provider connector') && source.includes('Mocked until an official provider OAuth path is confirmed')],
