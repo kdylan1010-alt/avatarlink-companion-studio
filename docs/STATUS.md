@@ -42,3 +42,9 @@
 - Secret scan remains clean outside the ignored local env file.
 - Current Gemini classification: quota-blocked provider lane, not a frontend/CORS/secret issue.
 - Current product proof lane: keep Mock full-chain demo as the visible shipped proof until a live approved provider succeeds.
+
+## Working alternate model proof
+
+- Gemini `generateContent` was tested across all listed `v1beta`/`v1` models plus OpenAI-compatible endpoint; none succeeded because the Google project/key returns `PROJECT_DENIED_ACCESS` or free-tier quota limit `0`.
+- Added a real alternate model fallback inside `scripts/gemini-proxy.mjs`: when Gemini is blocked, the proxy calls local Hermes/OpenAI-Codex via `hermes -z` and returns that LLM response to AvatarLink.
+- This keeps the user-visible chain working now: provider attempt → real alternate LLM response → browser speech/audio fallback → mouth/body movement.

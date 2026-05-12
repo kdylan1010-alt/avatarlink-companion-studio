@@ -77,3 +77,8 @@ See `.env.example` for placeholder values only:
   - **OAuth-ready provider connector**
 
 - Place the real Gemini key only in a local ignored env file such as `.env.local` using `GEMINI_API_KEY`. Never commit the real key or expose it through `VITE_` frontend env variables.
+
+
+## Hermes/OpenAI-Codex local fallback
+
+When Gemini generation is blocked by Google project/quota restrictions, `scripts/gemini-proxy.mjs` can call local Hermes via `hermes -z` as a real alternate LLM provider. This is a local development proof path, not a public SaaS secret strategy. For public deployment, replace it with an official hosted provider API or backend OAuth/API-key flow.

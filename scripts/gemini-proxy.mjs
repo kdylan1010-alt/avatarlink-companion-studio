@@ -1,9 +1,13 @@
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 
 const PORT = Number(process.env.GEMINI_PROXY_PORT || 8787)
 const PROJECT_ROOT = process.cwd()
+const execFileAsync = promisify(execFile)
+const HERMES_BIN = process.env.HERMES_BIN || '/Users/a1111/.local/bin/hermes'
 
 function loadLocalEnv() {
   const envPath = path.join(PROJECT_ROOT, '.env.local')
@@ -33,6 +37,22 @@ async function readJson(req) {
   for await (const chunk of req) chunks.push(chunk)
   if (!chunks.length) return {}
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+async function callHermesFallback({ systemPrompt, userPrompt }) {
+  const prompt = `${systemPrompt || 'You are an AvatarLink companion.'}\n\nUser: ${userPrompt || 'Hello'}\n\nReply as the avatar companion in 1-2 short sentences.`
+  try {
+    const { stdout } = await execFileAsync(HERMES_BIN, ['-z', prompt], {
+      timeout: 90000,
+      maxBuffer: 1024 * 1024,
+      env: { ...process.env, PATH: `/Users/a1111/.local/bin:${process.env.PATH || ''}` },
+    })
+    const text = stdout.trim()
+    if (text) return { ok: true, text, model: 'hermes-openai-codex-fallback' }
+    return { ok: false, message: 'Hermes fallback returned empty output' }
+  } catch (error) {
+    return { ok: false, message: error.message || 'Hermes fallback failed' }
+  }
 }
 
 function fallbackReply(userPrompt) {
@@ -96,10 +116,20 @@ const server = http.createServer(async (req, res) => {
       const payload = await readJson(req)
       const result = await callGemini(payload)
       if (result.ok) return jsonResponse(res, 200, result)
+      const hermesFallback = await callHermesFallback(payload)
+      if (hermesFallback.ok) {
+        return jsonResponse(res, 200, {
+          ok: true,
+          text: hermesFallback.text,
+          model: hermesFallback.model,
+          fallbackProvider: 'hermes-openai-codex',
+          geminiBlocked: { code: result.code, message: result.message },
+        })
+      }
       return jsonResponse(res, result.status || 502, {
         ok: false,
         code: result.code,
-        message: result.message,
+        message: `${result.message}; Hermes fallback also failed: ${hermesFallback.message}`,
         fallbackText: fallbackReply(payload.userPrompt),
       })
     } catch (error) {
