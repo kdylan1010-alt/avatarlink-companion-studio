@@ -59,7 +59,9 @@ export function ChatWorkbench({
         <p className="muted">OAuth-ready provider connector is a generic placeholder only. Mocked until an official provider OAuth path is confirmed.</p>
         <p className="muted">OpenAI-compatible base URL providers are supported, but no secrets go into frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
         {isSafeProxy && (
-          <p className="muted">Safe proxy selected: keep the proxy running locally, load secrets from ignored .env.local, then use the health/generate endpoints below. The token is never entered in this browser UI.</p>
+          <div className="status-chip" role="status">
+            Safe proxy selected: browser → local /generate endpoint → official provider chat/completions. Secrets stay in ignored .env.local; use /health to confirm key presence.
+          </div>
         )}
       </div>
       <div className="stack">
