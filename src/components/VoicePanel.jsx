@@ -34,8 +34,8 @@ export function VoicePanel({
         <label>
           Voice provider
           <select value={voiceProvider} onChange={(event) => onVoiceProviderChange(event.target.value)}>
-            <option value="browser-speech">browser-speech</option>
-            <option value="provider-api-todo">provider-api-todo</option>
+            <option value="browser-speech">browser-speech (audible demo)</option>
+            <option value="motion-only-fallback">motion-only-fallback (no audio, avatar reaction proof)</option>
           </select>
         </label>
         <label>
@@ -112,7 +112,7 @@ export function VoicePanel({
         <div className="meter meter-3"></div>
         <div className="meter meter-4"></div>
       </div>
-      <p className="muted">Current preview signal is wired into the VRM runtime; browser speech fallback animates the avatar mouth while speaking.</p>
+      <p className="muted">Current preview signal is wired into the VRM runtime; choose browser-speech for audible demo output or motion-only-fallback to prove avatar response without browser audio.</p>
     </section>
   )
 }

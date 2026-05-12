@@ -33,6 +33,7 @@ const checks = [
   ['companion_runtime_button', source.includes('Run companion reply')],
   ['demo_runtime_mode', source.includes('Demo mode + browser speech fallback')],
   ['voice_selector', source.includes('Voice provider') && source.includes('Voice ID / browser voice')],
+  ['voice_modes', source.includes('browser-speech (audible demo)') && source.includes('motion-only-fallback (no audio, avatar reaction proof)') && !source.includes('provider-api-todo')],
   ['runtime_status_panel', source.includes('Companion runtime status') && source.includes('Last assistant response')],
   ['github_models_proxy_default', source.includes('GitHub Models (safe local proxy, recommended)') && source.includes('openai/gpt-4.1-mini') && source.includes('Safe proxy selected')],
   ['safe_proxy_key_hidden', source.includes('API key field hidden for safe proxy providers') && source.includes('.env.local server-side only')],

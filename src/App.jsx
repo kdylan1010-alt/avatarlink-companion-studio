@@ -334,7 +334,7 @@ export default function App() {
     }, 140)
 
     if (voiceProvider !== 'browser-speech') {
-      setSpeechStatus('Provider API TODO selected — lip-sync demo ran without browser speech audio')
+      setSpeechStatus('Motion-only fallback selected — avatar reaction proof ran without browser speech audio')
       if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
       if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
       window.setTimeout(() => setAvatarMood('celebrate'), 160)
