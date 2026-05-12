@@ -4,7 +4,7 @@ import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
-const PORT = Number(process.env.GEMINI_PROXY_PORT || 8787)
+const PORT = Number(process.env.AVATARLINK_PROXY_PORT || process.env.GEMINI_PROXY_PORT || 8787)
 const PROJECT_ROOT = process.cwd()
 const execFileAsync = promisify(execFile)
 const HERMES_BIN = process.env.HERMES_BIN || '/Users/a1111/.local/bin/hermes'
@@ -56,14 +56,21 @@ async function callHermesFallback({ systemPrompt, userPrompt }) {
 }
 
 function fallbackReply(userPrompt) {
-  return `AvatarLink local fallback: I heard “${userPrompt || 'your message'}.” Gemini is configured through the safe proxy, but the current Google project is blocked or quota-limited, so the avatar chain continues with local speech and movement.`
+  return `AvatarLink local fallback: I heard “${userPrompt || 'your message'}.” The live provider is configured through the safe proxy, but it is currently blocked or unavailable, so the avatar chain continues with local speech and movement.`
+}
+
+function redactSecretText(value) {
+  return String(value || '')
+    .replace(/gh[pousr]_[0-9A-Za-z_]+/g, '[REDACTED]')
+    .replace(/github_pat_[0-9A-Za-z_]+/g, '[REDACTED]')
+    .replace(/AIza[0-9A-Za-z_-]+/g, '[REDACTED]')
 }
 
 function classifyGeminiError(status, bodyText) {
   try {
     const parsed = JSON.parse(bodyText)
     const err = parsed.error || {}
-    const message = String(err.message || bodyText).replace(/AIza[0-9A-Za-z_-]+/g, '[REDACTED]')
+    const message = redactSecretText(err.message || bodyText)
     if (status === 403 && /denied access/i.test(message)) {
       return { code: 'PROJECT_DENIED_ACCESS', message }
     }
@@ -74,6 +81,52 @@ function classifyGeminiError(status, bodyText) {
   } catch {
     return { code: `HTTP_${status}`, message: bodyText.slice(0, 500) }
   }
+}
+
+
+function classifyGithubModelsError(status, bodyText) {
+  try {
+    const parsed = JSON.parse(bodyText)
+    const message = redactSecretText(parsed?.error?.message || parsed?.message || bodyText)
+    if (status === 401) return { code: 'GITHUB_MODELS_UNAUTHORIZED', message }
+    if (status === 403) return { code: 'GITHUB_MODELS_FORBIDDEN', message }
+    if (status === 404) return { code: 'GITHUB_MODELS_MODEL_NOT_FOUND', message }
+    if (status === 429) return { code: 'GITHUB_MODELS_RATE_LIMITED', message }
+    return { code: `GITHUB_MODELS_HTTP_${status}`, message }
+  } catch {
+    return { code: `GITHUB_MODELS_HTTP_${status}`, message: redactSecretText(bodyText).slice(0, 500) }
+  }
+}
+
+async function callGithubModels({ model, systemPrompt, userPrompt }) {
+  const key = process.env.GITHUB_TOKEN
+  if (!key) {
+    return { ok: false, status: 500, code: 'MISSING_GITHUB_TOKEN', message: 'GITHUB_TOKEN is missing from .env.local' }
+  }
+  const selectedModel = model || process.env.GITHUB_MODELS_MODEL || 'openai/gpt-4.1-mini'
+  const response = await fetch('https://models.github.ai/inference/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model: selectedModel,
+      messages: [
+        { role: 'system', content: systemPrompt || 'You are an AvatarLink companion.' },
+        { role: 'user', content: userPrompt || 'Hello' },
+      ],
+      temperature: 0.7,
+      max_tokens: 220,
+    }),
+  })
+  const bodyText = await response.text()
+  if (!response.ok) {
+    return { ok: false, status: response.status, ...classifyGithubModelsError(response.status, bodyText) }
+  }
+  const parsed = JSON.parse(bodyText)
+  const text = parsed?.choices?.[0]?.message?.content?.trim()
+  return { ok: true, text: text || 'GitHub Models returned an empty response.', model: selectedModel }
 }
 
 async function callGemini({ model, systemPrompt, userPrompt }) {
@@ -109,7 +162,35 @@ async function callGemini({ model, systemPrompt, userPrompt }) {
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return jsonResponse(res, 204, {})
   if (req.url === '/api/gemini/health') {
-    return jsonResponse(res, 200, { ok: true, hasKey: Boolean(process.env.GEMINI_API_KEY), keyExposed: false })
+    return jsonResponse(res, 200, { ok: true, provider: 'gemini', hasKey: Boolean(process.env.GEMINI_API_KEY), keyExposed: false })
+  }
+  if (req.url === '/api/github-models/health') {
+    return jsonResponse(res, 200, { ok: true, provider: 'github-models', hasKey: Boolean(process.env.GITHUB_TOKEN), keyExposed: false, model: process.env.GITHUB_MODELS_MODEL || 'openai/gpt-4.1-mini' })
+  }
+  if (req.url === '/api/github-models/generate' && req.method === 'POST') {
+    try {
+      const payload = await readJson(req)
+      const result = await callGithubModels(payload)
+      if (result.ok) return jsonResponse(res, 200, result)
+      const hermesFallback = await callHermesFallback(payload)
+      if (hermesFallback.ok) {
+        return jsonResponse(res, 200, {
+          ok: true,
+          text: hermesFallback.text,
+          model: hermesFallback.model,
+          fallbackProvider: 'hermes-openai-codex',
+          providerBlocked: { provider: 'github-models', code: result.code, message: result.message },
+        })
+      }
+      return jsonResponse(res, result.status || 502, {
+        ok: false,
+        code: result.code,
+        message: `${result.message}; Hermes fallback also failed: ${hermesFallback.message}`,
+        fallbackText: fallbackReply(payload.userPrompt),
+      })
+    } catch (error) {
+      return jsonResponse(res, 500, { ok: false, code: 'GITHUB_MODELS_PROXY_ERROR', message: redactSecretText(error.message) })
+    }
   }
   if (req.url === '/api/gemini/generate' && req.method === 'POST') {
     try {
@@ -140,6 +221,7 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`AvatarLink Gemini proxy listening on http://127.0.0.1:${PORT}`)
+  console.log(`AvatarLink safe model proxy listening on http://127.0.0.1:${PORT}`)
   console.log(`Gemini key loaded: ${Boolean(process.env.GEMINI_API_KEY)} (secret not printed)`)
+  console.log(`GitHub Models token loaded: ${Boolean(process.env.GITHUB_TOKEN)} (secret not printed)`)
 })

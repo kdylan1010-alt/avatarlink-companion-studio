@@ -33,6 +33,14 @@ const PROVIDER_PRESETS = {
     transport: 'openai-compatible',
     authNote: 'Use an official OpenRouter API key. For low-cost testing, choose a current :free model from the OpenRouter catalog.',
   },
+  githubModels: {
+    id: 'githubModels',
+    label: 'GitHub Models via local safe proxy',
+    apiBase: 'http://127.0.0.1:8787/api/github-models',
+    model: 'openai/gpt-4.1-mini',
+    transport: 'local-github-models-proxy',
+    authNote: 'Recommended live demo path. Uses GITHUB_TOKEN only in .env.local through the local/server proxy; the browser never receives the token.',
+  },
   gemini: {
     id: 'gemini',
     label: 'Gemini API key via local safe proxy',
@@ -94,6 +102,11 @@ const PROVIDER_ENV_DEFAULTS = {
     apiKey: import.meta.env.VITE_OPENROUTER_API_KEY || '',
     model: import.meta.env.VITE_OPENROUTER_MODEL || PROVIDER_PRESETS.openrouter.model,
   },
+  githubModels: {
+    apiBase: import.meta.env.VITE_GITHUB_MODELS_PROXY_BASE || PROVIDER_PRESETS.githubModels.apiBase,
+    apiKey: '',
+    model: import.meta.env.VITE_GITHUB_MODELS_MODEL || PROVIDER_PRESETS.githubModels.model,
+  },
   gemini: {
     apiBase: import.meta.env.VITE_GEMINI_PROXY_BASE || PROVIDER_PRESETS.gemini.apiBase,
     apiKey: '',
@@ -123,6 +136,9 @@ function getProviderRuntimeDefaults(providerId) {
 function buildProviderSelectedStatus(providerId, label, hasLocalKey) {
   if (providerId === 'oauthReady') {
     return 'OAuth-ready connector scaffold selected — mocked until an official provider OAuth path is confirmed'
+  }
+  if (providerId === 'githubModels') {
+    return `Provider preset selected: ${label}. Real calls go through the local/server GitHub Models proxy so GITHUB_TOKEN stays out of the browser bundle.`
   }
   if (providerId === 'gemini') {
     return `Provider preset selected: ${label}. Real calls go through the local/server Gemini proxy so the API key stays out of the browser bundle.`
@@ -162,27 +178,29 @@ async function requestCompanionResponse({
     }
   }
 
-  if (modelProvider === 'gemini') {
+  if (modelProvider === 'githubModels' || modelProvider === 'gemini') {
+    const proxyLabel = modelProvider === 'githubModels' ? 'GitHub Models' : 'Gemini'
     const response = await fetch(`${apiBase.replace(/\/$/, '')}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, systemPrompt: systemPromptPreview, userPrompt }),
     })
     const data = await response.json().catch(() => ({}))
-    if (response.ok && data?.text) {
+    const blocked = data?.providerBlocked || data?.geminiBlocked
+    if (response.ok && data?.text && !data?.fallbackProvider && !blocked) {
       return {
         text: data.text.trim(),
-        label: `live-gemini:${data.model || model}`,
-        status: `Live Gemini response received through safe local proxy (${data.model || model})`,
+        label: `live-${modelProvider}:${data.model || model}`,
+        status: `Live ${proxyLabel} response received through safe local proxy (${data.model || model})`,
         live: true,
       }
     }
-    const fallbackText = data?.fallbackText || buildDemoReply(persona, userPrompt)
-    const reason = data?.message || data?.error || `Gemini proxy HTTP ${response.status}`
+    const fallbackText = data?.text || data?.fallbackText || buildDemoReply(persona, userPrompt)
+    const reason = blocked?.message || data?.message || data?.error || `${proxyLabel} proxy HTTP ${response.status}`
     return {
       text: fallbackText,
-      label: `fallback-gemini:${data?.code || response.status}`,
-      status: `Gemini blocked (${reason}); full avatar chain continued with local fallback speech/movement`,
+      label: `fallback-${modelProvider}:${data?.code || blocked?.code || response.status}`,
+      status: `${proxyLabel} blocked (${reason}); full avatar chain continued with local fallback speech/movement`,
       live: false,
     }
   }
@@ -225,10 +243,10 @@ async function requestCompanionResponse({
 
 export default function App() {
   const [persona, setPersona] = useState(starterPersona)
-  const [modelProvider, setModelProvider] = useState('mock')
-  const [apiBase, setApiBase] = useState(getProviderRuntimeDefaults('mock').apiBase)
-  const [apiKey, setApiKey] = useState(getProviderRuntimeDefaults('mock').apiKey)
-  const [model, setModel] = useState(getProviderRuntimeDefaults('mock').model)
+  const [modelProvider, setModelProvider] = useState('githubModels')
+  const [apiBase, setApiBase] = useState(getProviderRuntimeDefaults('githubModels').apiBase)
+  const [apiKey, setApiKey] = useState(getProviderRuntimeDefaults('githubModels').apiKey)
+  const [model, setModel] = useState(getProviderRuntimeDefaults('githubModels').model)
   const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')

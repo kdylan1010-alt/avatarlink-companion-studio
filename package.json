@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "qa:smoke": "node scripts/qa-smoke.mjs",
-    "gemini:proxy": "node scripts/gemini-proxy.mjs"
+    "gemini:proxy": "node scripts/gemini-proxy.mjs",
+    "github-models:proxy": "node scripts/gemini-proxy.mjs"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.4.2",

@@ -22,7 +22,7 @@ export function ChatWorkbench({
     <section className="panel human-card" data-testid="chat-workbench">
       <div className="section-head">
         <p className="eyebrow">Conversation</p>
-        <h2>Chat UI + BYOK config</h2>
+        <h2>Chat UI + safe model proxy</h2>
       </div>
       <div className="preview-card">
         <p className="mono">Model provider</p>
@@ -31,6 +31,7 @@ export function ChatWorkbench({
           <select value={modelProvider} onChange={(e) => onModelProvider(e.target.value)}>
             <option value="mock">Mock / test mode (no paid key required)</option>
             <option value="openrouter">OpenRouter (OpenAI-compatible, supports :free models)</option>
+            <option value="githubModels">GitHub Models (safe local proxy, recommended)</option>
             <option value="gemini">Gemini API key (free-tier friendly scaffold)</option>
             <option value="ollama">Local Ollama (dev/local)</option>
             <option value="openai">Official OpenAI API key / project</option>
@@ -43,8 +44,8 @@ export function ChatWorkbench({
         <p className="muted">No secrets in frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
       </div>
       <div className="stack">
-        <label>OpenAI-compatible base URL<input value={apiBase} onChange={(e) => onApiBase(e.target.value)} spellCheck="false" /></label>
-        <label>API key (local only)<input value={apiKey} onChange={(e) => onApiKey(e.target.value)} placeholder="sk-..." type="password" spellCheck="false" /></label>
+        <label>Provider/proxy base URL (OpenAI-compatible base URL for BYOK providers)<input value={apiBase} onChange={(e) => onApiBase(e.target.value)} spellCheck="false" /></label>
+        <label>API key (OpenAI-compatible browser BYOK only; hidden for safe proxy providers)<input value={apiKey} onChange={(e) => onApiKey(e.target.value)} placeholder="leave blank for GitHub Models/Gemini proxy" type="password" spellCheck="false" /></label>
         <label>Model<input value={model} onChange={(e) => onModel(e.target.value)} spellCheck="false" /></label>
       </div>
       <div className="preview-card">
@@ -54,7 +55,8 @@ export function ChatWorkbench({
   label: '${providerMeta.label}',
   transport: '${providerMeta.transport}',
   baseUrl: '${apiBase}',
-  model: '${model}'
+  model: '${model}',
+  secretPath: '${modelProvider === 'githubModels' || modelProvider === 'gemini' ? '.env.local server-side only' : 'browser BYOK only if entered'}'
 }`}</pre>
       </div>
       <div className="preview-card">
@@ -82,7 +84,7 @@ export function ChatWorkbench({
         {isRunning ? 'Running companion…' : 'Run companion reply'}
       </button>
       <p className="muted">
-        Demo mode + browser speech fallback runs end-to-end without paid TTS keys. OpenRouter, Gemini, Ollama, and official OpenAI API stay on the BYOK path; OAuth is scaffold-only for now.
+        GitHub Models and Gemini use the safe local proxy with server-side env secrets. Demo mode + browser speech fallback runs end-to-end without paid TTS keys; OAuth is scaffold-only for now.
       </p>
     </section>
   )
