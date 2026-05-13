@@ -27,15 +27,15 @@ export function VoicePanel({
     <section className="panel human-card" data-testid="voice-panel">
       <div className="section-head">
         <p className="eyebrow">Voice + motion</p>
-        <h2>TTS adapter stub + mouth movement signal</h2>
+        <h2>Natural TTS provider + mouth movement signal</h2>
       </div>
       <div className="preview-card">
         <p className="mono">Voice provider</p>
         <label>
           Voice provider
           <select value={voiceProvider} onChange={(event) => onVoiceProviderChange(event.target.value)}>
-            <option value="browser-speech">browser-speech (audible demo)</option>
-            <option value="motion-only-fallback">motion-only-fallback (no audio, avatar reaction proof)</option>
+            <option value="browser-speech">browser-speech (fallback only — not final)</option>
+            <option value="motion-only-fallback">motion-only-fallback (no audio fallback)</option>
           </select>
         </label>
         <label>
@@ -112,7 +112,7 @@ export function VoicePanel({
         <div className="meter meter-3"></div>
         <div className="meter meter-4"></div>
       </div>
-      <p className="muted">Current preview signal is wired into the VRM runtime; choose browser-speech for audible demo output or motion-only-fallback to prove avatar response without browser audio.</p>
+      <p className="muted">Current browser/system speech is fallback-only. Final voice should come from a backend TTS provider endpoint such as /api/tts/elevenlabs, /api/tts/openai, or /api/tts/cartesia so secrets stay server-side.</p>
     </section>
   )
 }

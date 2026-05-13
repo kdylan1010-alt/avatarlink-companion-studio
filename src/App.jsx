@@ -259,7 +259,7 @@ export default function App() {
   const [isMovementProofRunning, setIsMovementProofRunning] = useState(false)
   const [voiceProvider, setVoiceProvider] = useState('browser-speech')
   const [voiceId, setVoiceId] = useState('browser-default')
-  const [speechStatus, setSpeechStatus] = useState('Browser speech fallback ready')
+  const [speechStatus, setSpeechStatus] = useState('Browser/system speech is fallback only — backend TTS provider not configured yet')
   const [availableVoices, setAvailableVoices] = useState([{ id: 'browser-default', label: 'browser-default' }])
   const [isRunning, setIsRunning] = useState(false)
   const cancelPlaybackRef = useRef(() => {})

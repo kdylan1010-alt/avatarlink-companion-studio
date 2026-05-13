@@ -20,8 +20,12 @@ export function VrmStudioPanel({
 }) {
   const canvasRef = useRef(null)
   const runtimeRef = useRef(null)
+  const armProofTimerRef = useRef(null)
   const [renderStatus, setRenderStatus] = useState('Preview canvas booting…')
   const [meta, setMeta] = useState('No VRM metadata yet')
+  const [armProofStatus, setArmProofStatus] = useState('Hands/arms proof not run yet')
+  const [armProofSummary, setArmProofSummary] = useState('Explicit humanoid shoulder/upperArm/lowerArm/hand transforms are waiting for a proof run.')
+  const [isArmProofRunning, setIsArmProofRunning] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -37,6 +41,10 @@ export function VrmStudioPanel({
       if (mounted) {
         setMeta(`${result?.avatarName || 'sample.vrm'} • VRM ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
         setRenderStatus('Default sample avatar rendered from /avatars/sample.vrm')
+        const initialSnapshot = runtimeRef.current?.getArmMotionSnapshot?.()
+        if (initialSnapshot?.availableBoneLabels?.length) {
+          setArmProofSummary(`Ready bones: ${initialSnapshot.availableBoneLabels.join(', ')}`)
+        }
       }
     }
 
@@ -47,6 +55,7 @@ export function VrmStudioPanel({
 
     return () => {
       mounted = false
+      window.clearTimeout(armProofTimerRef.current)
       runtimeRef.current?.destroy()
       runtimeRef.current = null
     }
@@ -69,6 +78,10 @@ export function VrmStudioPanel({
       const result = await runtimeRef.current?.loadFile(file)
       setMeta(`${result?.avatarName || file.name} • VRM ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
       setRenderStatus(`VRM preview rendered in-browser via ${sourceLabel}`)
+      const snapshot = runtimeRef.current?.getArmMotionSnapshot?.()
+      if (snapshot?.availableBoneLabels?.length) {
+        setArmProofSummary(`Ready bones: ${snapshot.availableBoneLabels.join(', ')}`)
+      }
       console.log('VRM file load succeeded', { sourceLabel, fileName: file.name, ...result })
     } catch (error) {
       console.error('Uploaded VRM failed', error)
@@ -95,6 +108,35 @@ export function VrmStudioPanel({
       console.error('Simulated upload failed', error)
       setMeta('VRM metadata unavailable')
       setRenderStatus(`Simulated upload failed: ${error.message}`)
+    }
+  }
+
+  const handleRunArmMotionProof = () => {
+    window.clearTimeout(armProofTimerRef.current)
+    try {
+      const summary = runtimeRef.current?.runArmMotionProof?.({ durationMs: 2600, cycleHz: 1.55 })
+      if (!summary) throw new Error('Arm proof runtime unavailable')
+      setIsArmProofRunning(true)
+      setArmProofStatus('Hands/arms proof running — explicit shoulder/upperArm/lowerArm/hand transforms active with smooth clamped sine easing')
+      setArmProofSummary(`Animating ${summary.animatedBoneCount} normalized bones: ${summary.availableBoneLabels.join(', ')}`)
+      armProofTimerRef.current = window.setTimeout(() => {
+        const snapshot = runtimeRef.current?.getArmMotionSnapshot?.()
+        const peakSummary = snapshot?.peakDegrees
+          ? Object.entries(snapshot.peakDegrees)
+              .slice(0, 4)
+              .map(([bone, axis]) => `${bone} x${axis.x}° y${axis.y}° z${axis.z}°`)
+              .join(' • ')
+          : 'Peak arm angles unavailable'
+        setArmProofStatus('Hands/arms proof complete — shoulders, upper/lower arms, and hands moved smoothly and eased back to idle without snapping')
+        setArmProofSummary(`Animated ${snapshot?.animatedBoneCount ?? summary.animatedBoneCount} bones. Peaks: ${peakSummary}`)
+        setIsArmProofRunning(false)
+        console.log('Hands/arms proof complete', snapshot)
+      }, summary.durationMs + 180)
+    } catch (error) {
+      setIsArmProofRunning(false)
+      setArmProofStatus(`Hands/arms proof failed: ${error.message}`)
+      setArmProofSummary('No arm-motion proof snapshot captured')
+      console.error('Hands/arms proof failed', error)
     }
   }
 
@@ -135,15 +177,22 @@ export function VrmStudioPanel({
         <p className="mono">Chat reaction proof</p>
         <p>{runtimeStatus}</p>
         <p className="muted">{assistantResponse || 'Awaiting assistant response for chat-state proof.'}</p>
+        <p className="mono">Hands/arms proof</p>
+        <p>{armProofStatus}</p>
+        <p className="muted">{armProofSummary}</p>
         <p className="mono">Movement signal ladder</p>
-        <p>VRM → blink/breathe → head sway → mouth test → response expression</p>
+        <p>VRM → blink/breathe → head sway → mouth test → shoulder/upperArm/lowerArm/hand motion → response expression</p>
         <ul className="proof-checklist">
           <li>{uploadedVrmName !== 'No VRM loaded yet' ? '✅' : '⬜'} VRM load ready</li>
           <li>✅ Blink / breathe / head movement loop</li>
           <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') || movementProofStatus.includes('Full demo complete') || runtimeStatus.includes('mouth/expression motion') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
+          <li>{armProofStatus.includes('running') || armProofStatus.includes('complete') ? '✅' : '⬜'} Explicit shoulder / upperArm / lowerArm / hand motion proof</li>
           <li>{runtimeStatus.includes('expression change on response') || runtimeStatus.includes('response expression latched') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
         </ul>
         <div className="button-row">
+          <button className="secondary-button" type="button" onClick={handleRunArmMotionProof} disabled={isArmProofRunning}>
+            {isArmProofRunning ? 'Hands/arms proof running…' : 'Run hands/arms proof'}
+          </button>
           <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
             {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
           </button>

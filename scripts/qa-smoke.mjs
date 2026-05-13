@@ -13,6 +13,7 @@ const source = [
 ].map((path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 const css = fs.readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8')
 const envExample = fs.readFileSync(new URL('../.env.example', import.meta.url), 'utf8')
+const proxySource = fs.readFileSync(new URL('../scripts/gemini-proxy.mjs', import.meta.url), 'utf8')
 
 const checks = [
   ['title', html.includes('AvatarLink Companion Studio')],
@@ -20,7 +21,7 @@ const checks = [
   ['persona_editor', source.includes('Companion persona editor')],
   ['vrm_upload', source.includes('VRM upload + live preview')],
   ['byok', source.includes('OpenAI-compatible base URL')],
-  ['tts_stub', source.includes('TTS adapter stub + mouth movement signal')],
+  ['tts_backend_final_path', proxySource.includes('/api/tts/elevenlabs') && proxySource.includes('/api/tts/openai') && proxySource.includes('/api/tts/cartesia') && source.includes('Current browser/system speech is fallback-only')],
   ['mouth_open_mapping', source.includes('Amplitude → mouth-open mapping')],
   ['viseme_timeline', source.includes('Viseme timeline preview')],
   ['viseme_playback', source.includes('Playback driver status')],
@@ -33,7 +34,7 @@ const checks = [
   ['companion_runtime_button', source.includes('Run companion reply')],
   ['demo_runtime_mode', source.includes('Demo mode + browser speech fallback')],
   ['voice_selector', source.includes('Voice provider') && source.includes('Voice ID / browser voice')],
-  ['voice_modes', source.includes('browser-speech (audible demo)') && source.includes('motion-only-fallback (no audio, avatar reaction proof)') && !source.includes('provider-api-todo')],
+  ['voice_modes_fallback_only', source.includes('browser-speech (fallback only — not final)') && source.includes('motion-only-fallback (no audio fallback)') && source.includes('Current browser/system speech is fallback-only') && !source.includes('provider-api-todo')],
   ['runtime_status_panel', source.includes('Companion runtime status') && source.includes('Last assistant response')],
   ['github_models_proxy_default', source.includes('GitHub Models (safe local proxy, recommended)') && source.includes('openai/gpt-4.1-mini') && source.includes('Safe proxy selected')],
   ['safe_proxy_key_hidden', source.includes('API key field hidden for safe proxy providers') && source.includes('.env.local server-side only')],
@@ -58,7 +59,9 @@ const checks = [
   ['movement_reaction_states', source.includes('Idle / blink / breathe loop ready') && source.includes('Avatar reaction state') && source.includes('expression change on response')],
   ['movement_head_sway', source.includes('Head sway + breathe loop active')],
   ['movement_chat_reaction_proof', source.includes('Chat reaction proof') && source.includes('Expression/chat state reaction proof')],
-  ['movement_signal_ladder', source.includes('Movement signal ladder') && source.includes('VRM → blink/breathe → head sway → mouth test → response expression')],
+  ['movement_hands_arms_button', source.includes('Run hands/arms proof')],
+  ['movement_hands_arms_status', source.includes('Hands/arms proof') && source.includes('Explicit shoulder / upperArm / lowerArm / hand motion proof')],
+  ['movement_signal_ladder', source.includes('Movement signal ladder') && source.includes('VRM → blink/breathe → head sway → mouth test → shoulder/upperArm/lowerArm/hand motion → response expression')],
   ['movement_replay_button', source.includes('Replay chat reaction')],
   ['movement_idle_reset_proof', source.includes('Idle reset proof') && source.includes('Run idle reset proof')],
   ['movement_mouth_amplitude_proof', source.includes('Mouth amplitude proof') && source.includes('Run mouth amplitude proof')],

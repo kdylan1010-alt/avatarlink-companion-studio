@@ -3,13 +3,17 @@
 ## Default demo avatar
 - Local path: `public/avatars/sample.vrm`
 - Served path: `/avatars/sample.vrm`
-- Source: `mrxz/vrm-sample-models` → `human_male/human_male.vrm`
-- Source URL: https://github.com/mrxz/vrm-sample-models/tree/master/human_male
-- Raw download URL: https://raw.githubusercontent.com/mrxz/vrm-sample-models/master/human_male/human_male.vrm
-- License note in sample repo: `human_male/LICENSE` → `https://creativecommons.org/publicdomain/zero/1.0`
-- Source-model attribution note in sample repo README: base model by `VideroBoy`, released under CC0 via OpenGameArt.
+- Current default source: `madjin/vrm-samples` → `vroid/fem_vroid.vrm`
+- Source repository URL: https://github.com/madjin/vrm-samples
+- Source file URL: https://github.com/madjin/vrm-samples/blob/master/vroid/fem_vroid.vrm
+- Raw download URL: https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/fem_vroid.vrm
+- License/source basis: repository README points to VRoid FAQ conditions-of-use page; that FAQ states listed VRoid sample models in this lane are CC0 and can be edited and used freely.
+- License URL: https://vroid.pixiv.help/hc/en-us/articles/4402614652569-Do-VRoid-Studio-s-sample-models-come-with-conditions-of-use-
+- Product note: female-compatible fallback default for AvatarLink companion proof lane.
 
-## Why this sample
-- Smallest known public sample found during debugging
-- Explicit CC0 license note suitable for demo/testing
-- Minimal VRM content makes loader-isolation debugging easier
+## Prior local fallback retained for reference
+- Backup path: `public/avatars/sample-male-backup.vrm`
+- Previous source: `mrxz/vrm-sample-models` → `human_male/human_male.vrm`
+- Previous source URL: https://github.com/mrxz/vrm-sample-models/tree/master/human_male
+- Previous raw download URL: https://raw.githubusercontent.com/mrxz/vrm-sample-models/master/human_male/human_male.vrm
+- Previous license: CC0

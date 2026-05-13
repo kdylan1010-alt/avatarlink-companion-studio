@@ -8,6 +8,7 @@ const PORT = Number(process.env.AVATARLINK_PROXY_PORT || process.env.GEMINI_PROX
 const PROJECT_ROOT = process.cwd()
 const execFileAsync = promisify(execFile)
 const HERMES_BIN = process.env.HERMES_BIN || '/Users/a1111/.local/bin/hermes'
+const ARTIFACTS_DIR = path.join(PROJECT_ROOT, 'artifacts', 'tts')
 
 function loadLocalEnv() {
   const envPath = path.join(PROJECT_ROOT, '.env.local')
@@ -129,6 +130,163 @@ async function callGithubModels({ model, systemPrompt, userPrompt }) {
   return { ok: true, text: text || 'GitHub Models returned an empty response.', model: selectedModel }
 }
 
+
+function ensureArtifactsDir() {
+  fs.mkdirSync(ARTIFACTS_DIR, { recursive: true })
+}
+
+function safeSlug(value, fallback = 'sample') {
+  return String(value || fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || fallback
+}
+
+function writeAudioArtifact({ provider, ext, bytes }) {
+  ensureArtifactsDir()
+  const filename = `${new Date().toISOString().replace(/[:.]/g, '-')}-${safeSlug(provider)}.${ext}`
+  const filePath = path.join(ARTIFACTS_DIR, filename)
+  fs.writeFileSync(filePath, Buffer.from(bytes))
+  return filePath
+}
+
+function maybeReadWavDurationMs(buffer) {
+  try {
+    if (buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') return null
+    let offset = 12
+    let sampleRate = null
+    let byteRate = null
+    let dataSize = null
+    while (offset + 8 <= buffer.length) {
+      const chunkId = buffer.toString('ascii', offset, offset + 4)
+      const chunkSize = buffer.readUInt32LE(offset + 4)
+      const chunkStart = offset + 8
+      if (chunkId === 'fmt ') {
+        sampleRate = buffer.readUInt32LE(chunkStart + 4)
+        byteRate = buffer.readUInt32LE(chunkStart + 8)
+      }
+      if (chunkId === 'data') dataSize = chunkSize
+      offset = chunkStart + chunkSize + (chunkSize % 2)
+    }
+    if (byteRate && dataSize) return Math.round((dataSize / byteRate) * 1000)
+    if (sampleRate && dataSize) return Math.round((dataSize / sampleRate) * 1000)
+    return null
+  } catch {
+    return null
+  }
+}
+
+async function createTtsResult({ provider, response, ext, voiceId, voiceName, endpoint, modelId, format }) {
+  const arrayBuffer = await response.arrayBuffer()
+  const bytes = Buffer.from(arrayBuffer)
+  const audioPath = writeAudioArtifact({ provider, ext, bytes })
+  const durationMs = ext === 'wav' ? maybeReadWavDurationMs(bytes) : null
+  return {
+    ok: true,
+    provider,
+    voiceId,
+    voiceName,
+    modelId,
+    endpoint,
+    httpStatus: response.status,
+    contentType: response.headers.get('content-type') || 'application/octet-stream',
+    audioPath,
+    bytes: bytes.length,
+    durationMs,
+    format,
+  }
+}
+
+async function callElevenLabsTts({ text, voiceId, voiceName, modelId, outputFormat }) {
+  const key = process.env.ELEVENLABS_API_KEY
+  if (!key) {
+    return { ok: false, provider: 'elevenlabs', code: 'MISSING_ELEVENLABS_API_KEY', message: 'ELEVENLABS_API_KEY is missing from .env.local', endpoint: '/api/tts/elevenlabs', voiceId: voiceId || process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb', voiceName: voiceName || process.env.ELEVENLABS_VOICE_NAME || 'configure-in-dashboard' }
+  }
+  const selectedVoiceId = voiceId || process.env.ELEVENLABS_VOICE_ID || 'JBFqnCBsd6RMkjVDRZzb'
+  const selectedVoiceName = voiceName || process.env.ELEVENLABS_VOICE_NAME || 'configure-in-dashboard'
+  const selectedModelId = modelId || process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2'
+  const selectedOutputFormat = outputFormat || process.env.ELEVENLABS_OUTPUT_FORMAT || 'mp3_44100_128'
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}/stream?output_format=${encodeURIComponent(selectedOutputFormat)}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'xi-api-key': key,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text: text || 'AvatarLink voice quality proof sample.',
+      model_id: selectedModelId,
+    }),
+  })
+  if (!response.ok) {
+    const bodyText = redactSecretText(await response.text())
+    return { ok: false, provider: 'elevenlabs', code: `ELEVENLABS_HTTP_${response.status}`, message: bodyText.slice(0, 500), httpStatus: response.status, endpoint: '/api/tts/elevenlabs', voiceId: selectedVoiceId, voiceName: selectedVoiceName, modelId: selectedModelId }
+  }
+  return createTtsResult({ provider: 'elevenlabs', response, ext: 'mp3', voiceId: selectedVoiceId, voiceName: selectedVoiceName, endpoint: '/api/tts/elevenlabs', modelId: selectedModelId, format: selectedOutputFormat })
+}
+
+async function callOpenAITts({ text, voiceId, modelId, responseFormat }) {
+  const key = process.env.OPENAI_API_KEY
+  if (!key) {
+    return { ok: false, provider: 'openai', code: 'MISSING_OPENAI_API_KEY', message: 'OPENAI_API_KEY is missing from .env.local', endpoint: '/api/tts/openai', voiceId: voiceId || process.env.OPENAI_TTS_VOICE || 'marin', voiceName: voiceId || process.env.OPENAI_TTS_VOICE || 'marin' }
+  }
+  const selectedVoice = voiceId || process.env.OPENAI_TTS_VOICE || 'marin'
+  const selectedModelId = modelId || process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts'
+  const selectedFormat = responseFormat || process.env.OPENAI_TTS_FORMAT || 'mp3'
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: selectedModelId,
+      voice: selectedVoice,
+      input: text || 'AvatarLink voice quality proof sample.',
+      response_format: selectedFormat,
+    }),
+  })
+  if (!response.ok) {
+    const bodyText = redactSecretText(await response.text())
+    return { ok: false, provider: 'openai', code: `OPENAI_TTS_HTTP_${response.status}`, message: bodyText.slice(0, 500), httpStatus: response.status, endpoint: '/api/tts/openai', voiceId: selectedVoice, voiceName: selectedVoice, modelId: selectedModelId }
+  }
+  return createTtsResult({ provider: 'openai', response, ext: selectedFormat === 'wav' ? 'wav' : 'mp3', voiceId: selectedVoice, voiceName: selectedVoice, endpoint: '/api/tts/openai', modelId: selectedModelId, format: selectedFormat })
+}
+
+async function callCartesiaTts({ text, voiceId, voiceName, modelId }) {
+  const key = process.env.CARTESIA_API_KEY
+  if (!key) {
+    return { ok: false, provider: 'cartesia', code: 'MISSING_CARTESIA_API_KEY', message: 'CARTESIA_API_KEY is missing from .env.local', endpoint: '/api/tts/cartesia', voiceId: voiceId || process.env.CARTESIA_VOICE_ID || 'configure-in-dashboard', voiceName: voiceName || process.env.CARTESIA_VOICE_NAME || 'configure-in-dashboard' }
+  }
+  const selectedVoiceId = voiceId || process.env.CARTESIA_VOICE_ID
+  const selectedVoiceName = voiceName || process.env.CARTESIA_VOICE_NAME || selectedVoiceId || 'configure-in-dashboard'
+  if (!selectedVoiceId) {
+    return { ok: false, provider: 'cartesia', code: 'MISSING_CARTESIA_VOICE_ID', message: 'CARTESIA_VOICE_ID is missing from .env.local', endpoint: '/api/tts/cartesia', voiceId: 'configure-in-dashboard', voiceName: selectedVoiceName }
+  }
+  const selectedModelId = modelId || process.env.CARTESIA_MODEL_ID || 'sonic-3'
+  const response = await fetch('https://api.cartesia.ai/tts/bytes', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Cartesia-Version': process.env.CARTESIA_API_VERSION || '2026-03-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model_id: selectedModelId,
+      transcript: text || 'AvatarLink voice quality proof sample.',
+      voice: { mode: 'id', id: selectedVoiceId },
+      output_format: { container: 'mp3', sample_rate: 44100, bit_rate: 128000 },
+      language: 'en',
+    }),
+  })
+  if (!response.ok) {
+    const bodyText = redactSecretText(await response.text())
+    return { ok: false, provider: 'cartesia', code: `CARTESIA_HTTP_${response.status}`, message: bodyText.slice(0, 500), httpStatus: response.status, endpoint: '/api/tts/cartesia', voiceId: selectedVoiceId, voiceName: selectedVoiceName, modelId: selectedModelId }
+  }
+  return createTtsResult({ provider: 'cartesia', response, ext: 'mp3', voiceId: selectedVoiceId, voiceName: selectedVoiceName, endpoint: '/api/tts/cartesia', modelId: selectedModelId, format: 'mp3_44100_128' })
+}
+
 async function callGemini({ model, systemPrompt, userPrompt }) {
   const key = process.env.GEMINI_API_KEY
   if (!key) {
@@ -215,6 +373,44 @@ const server = http.createServer(async (req, res) => {
       })
     } catch (error) {
       return jsonResponse(res, 500, { ok: false, code: 'PROXY_ERROR', message: error.message })
+    }
+  }
+  if (req.url === '/api/tts/health') {
+    return jsonResponse(res, 200, {
+      ok: true,
+      providerKeys: {
+        elevenlabs: Boolean(process.env.ELEVENLABS_API_KEY),
+        openai: Boolean(process.env.OPENAI_API_KEY),
+        cartesia: Boolean(process.env.CARTESIA_API_KEY),
+      },
+      browserVoiceIsFallbackOnly: true,
+    })
+  }
+  if (req.url === '/api/tts/elevenlabs' && req.method === 'POST') {
+    try {
+      const payload = await readJson(req)
+      const result = await callElevenLabsTts(payload)
+      return jsonResponse(res, result.ok ? 200 : result.httpStatus || 503, result)
+    } catch (error) {
+      return jsonResponse(res, 500, { ok: false, provider: 'elevenlabs', code: 'ELEVENLABS_PROXY_ERROR', message: redactSecretText(error.message), endpoint: '/api/tts/elevenlabs' })
+    }
+  }
+  if (req.url === '/api/tts/openai' && req.method === 'POST') {
+    try {
+      const payload = await readJson(req)
+      const result = await callOpenAITts(payload)
+      return jsonResponse(res, result.ok ? 200 : result.httpStatus || 503, result)
+    } catch (error) {
+      return jsonResponse(res, 500, { ok: false, provider: 'openai', code: 'OPENAI_TTS_PROXY_ERROR', message: redactSecretText(error.message), endpoint: '/api/tts/openai' })
+    }
+  }
+  if (req.url === '/api/tts/cartesia' && req.method === 'POST') {
+    try {
+      const payload = await readJson(req)
+      const result = await callCartesiaTts(payload)
+      return jsonResponse(res, result.ok ? 200 : result.httpStatus || 503, result)
+    } catch (error) {
+      return jsonResponse(res, 500, { ok: false, provider: 'cartesia', code: 'CARTESIA_PROXY_ERROR', message: redactSecretText(error.message), endpoint: '/api/tts/cartesia' })
     }
   }
   jsonResponse(res, 404, { ok: false, message: 'Not found' })
