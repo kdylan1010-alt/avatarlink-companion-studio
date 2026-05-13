@@ -1,0 +1,44 @@
+{
+  "selected_path": "accepted_third_party_vroid_vrm_fallback",
+  "accepted_model": {
+    "name": "fem_vroid.vrm",
+    "source_repo_url": "https://github.com/madjin/vrm-samples",
+    "source_file_url": "https://github.com/madjin/vrm-samples/blob/master/vroid/fem_vroid.vrm",
+    "raw_url": "https://raw.githubusercontent.com/madjin/vrm-samples/master/vroid/fem_vroid.vrm",
+    "license_basis_url": "https://github.com/madjin/vrm-samples",
+    "license_summary": "Repository README license section states the VRoid sample models are CC0 and can be edited/used freely.",
+    "format": "VRM",
+    "active_local_path": "/Users/a1111/Desktop/avatarlink-companion-studio/public/avatars/sample.vrm",
+    "source_copy_path": "/Users/a1111/Desktop/avatarlink-companion-studio/public/avatars/sample-female-fallback.vrm",
+    "load_result": "Default sample avatar rendered from /avatars/sample.vrm",
+    "browser_proof_json": "/Users/a1111/Desktop/avatarlink-companion-studio/artifacts/avatarlink-browser-proof-e2e.json",
+    "browser_proof_png": "/Users/a1111/Desktop/avatarlink-companion-studio/artifacts/avatarlink-browser-proof-e2e.png"
+  },
+  "deferred_sketchfab": {
+    "reason": "Current runtime already loads VRM directly and the verified female VRM fallback satisfies the third-party legal/load lane now. Audited Sketchfab assets are CC BY but would require an additional conversion/import proof step not yet completed in this pass.",
+    "candidates": [
+      {
+        "name": "Human Male/Female Basemesh Rigged 3D Model",
+        "source_url": "https://sketchfab.com/3d-models/human-malefemale-basemesh-rigged-96fa14a5a3f0413e98b605e3f65e447c",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "license": "CC BY 4.0",
+        "expected_format": "Sketchfab downloadable asset (conversion/import path deferred)"
+      },
+      {
+        "name": "Humanoid Avatar with Rig 3D Model",
+        "source_url": "https://sketchfab.com/3d-models/humanoid-avatar-with-rig-995558e2514644909c9037b0e7762855",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "license": "CC BY 4.0",
+        "expected_format": "Sketchfab downloadable asset (conversion/import path deferred)"
+      }
+    ]
+  },
+  "proof_summary": {
+    "renderStatus": "Default sample avatar rendered from /avatars/sample.vrm",
+    "proofStatus": "Full demo complete \u2014 VRM + voice + provider/mock + chat + speech + mouth movement chain visible",
+    "runtimeStatus": "Full demo complete \u2014 user message produced a spoken response and drove avatar mouth/expression motion",
+    "handsArmsStatus": "Hands/arms proof complete \u2014 shoulders, upper/lower arms, and hands moved smoothly and eased back to idle without snapping",
+    "playbackStatus": "Speech complete \u2014 avatar returned to idle",
+    "providerPath": "full-demo:live-githubModels:openai/gpt-4.1-mini"
+  }
+}
