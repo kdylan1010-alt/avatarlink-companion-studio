@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { createVrmPreview } from '../lib/vrmRuntime'
 
 const SAMPLE_PATH = '/avatars/sample.vrm'
+const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz'
 
 export function VrmStudioPanel({
+  debugMode = false,
   uploadedVrmName,
   onUploadName,
   mouthOpen,
@@ -22,7 +24,8 @@ export function VrmStudioPanel({
   const runtimeRef = useRef(null)
   const armProofTimerRef = useRef(null)
   const [renderStatus, setRenderStatus] = useState('Preview canvas booting…')
-  const [meta, setMeta] = useState('No VRM metadata yet')
+  const [meta, setMeta] = useState('No avatar metadata yet')
+  const [assetKind, setAssetKind] = useState('VRM sample')
   const [armProofStatus, setArmProofStatus] = useState('Hands/arms proof not run yet')
   const [armProofSummary, setArmProofSummary] = useState('Explicit humanoid shoulder/upperArm/lowerArm/hand transforms are waiting for a proof run.')
   const [isArmProofRunning, setIsArmProofRunning] = useState(false)
@@ -39,7 +42,8 @@ export function VrmStudioPanel({
       console.log('Default sample VRM loaded', result)
       onUploadName('sample.vrm')
       if (mounted) {
-        setMeta(`${result?.avatarName || 'sample.vrm'} • VRM ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
+        setAssetKind(result?.format || 'VRM')
+        setMeta(`${result?.avatarName || 'sample.vrm'} • ${result?.format || 'VRM'} ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
         setRenderStatus('Default sample avatar rendered from /avatars/sample.vrm')
         const initialSnapshot = runtimeRef.current?.getArmMotionSnapshot?.()
         if (initialSnapshot?.availableBoneLabels?.length) {
@@ -76,17 +80,19 @@ export function VrmStudioPanel({
 
     try {
       const result = await runtimeRef.current?.loadFile(file)
-      setMeta(`${result?.avatarName || file.name} • VRM ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
-      setRenderStatus(`VRM preview rendered in-browser via ${sourceLabel}`)
+      setAssetKind(result?.format || 'avatar')
+      setMeta(`${result?.avatarName || file.name} • ${result?.format || 'avatar'} ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
+      setRenderStatus(`${result?.format || 'Avatar'} preview rendered in-browser via ${sourceLabel}`)
       const snapshot = runtimeRef.current?.getArmMotionSnapshot?.()
       if (snapshot?.availableBoneLabels?.length) {
         setArmProofSummary(`Ready bones: ${snapshot.availableBoneLabels.join(', ')}`)
       }
-      console.log('VRM file load succeeded', { sourceLabel, fileName: file.name, ...result })
+      console.log('Avatar file load succeeded', { sourceLabel, fileName: file.name, ...result })
     } catch (error) {
-      console.error('Uploaded VRM failed', error)
-      setMeta('VRM metadata unavailable')
-      setRenderStatus(`VRM load failed via ${sourceLabel}: ${error.message}`)
+      console.error('Uploaded avatar failed', error)
+      setAssetKind('Unsupported or failed import')
+      setMeta('Avatar metadata unavailable')
+      setRenderStatus(`Avatar load failed via ${sourceLabel}: ${error.message}`)
     }
   }
 
@@ -106,7 +112,8 @@ export function VrmStudioPanel({
       await loadFromFile(file, 'simulated upload')
     } catch (error) {
       console.error('Simulated upload failed', error)
-      setMeta('VRM metadata unavailable')
+      setAssetKind('Unsupported or failed import')
+      setMeta('Avatar metadata unavailable')
       setRenderStatus(`Simulated upload failed: ${error.message}`)
     }
   }
@@ -143,79 +150,86 @@ export function VrmStudioPanel({
   return (
     <section className="panel human-card" data-testid="vrm-studio-panel">
       <div className="section-head">
-        <p className="eyebrow">Avatar rig</p>
-        <h2>VRM upload + live preview</h2>
+        <p className="eyebrow">Step 1 — Avatar</p>
+        <h2>Upload or preview an avatar</h2>
+        <p className="muted">Use the built-in sample, or choose a Sketchfab-style export. VRM, GLB, and glTF preview directly; FBX/USDZ are accepted for clear conversion guidance.</p>
       </div>
       <label className="upload-box">
-        <span>Drop a .vrm file or choose one manually</span>
-        <input type="file" accept=".vrm" onChange={handleFile} />
+        <span>Choose avatar file (.vrm, .glb, .gltf, .fbx, .usdz)</span>
+        <input type="file" accept={IMPORT_ACCEPT} onChange={handleFile} />
       </label>
-      <button className="primary-button" type="button" onClick={handleSimulatedUpload}>Run simulated upload proof</button>
+      <div className="status-chip" role="status">Loaded: {uploadedVrmName} • Format: {assetKind}</div>
+      {debugMode && <button className="primary-button" type="button" onClick={handleSimulatedUpload}>Run simulated upload proof</button>}
       <div className="preview-stage">
         <canvas ref={canvasRef} className="preview-canvas" aria-label="VRM preview canvas" />
       </div>
       <div className="preview-card">
-        <p className="mono">Loaded asset</p>
+        <p className="mono">Avatar status</p>
         <strong>{uploadedVrmName}</strong>
-        <p className="mono">Default sample path</p>
-        <p>{SAMPLE_PATH}</p>
-        <p className="mono">Mouth-open signal</p>
-        <p>{mouthOpen.toFixed(2)}</p>
-        <p className="mono">Render status</p>
         <p>{renderStatus}</p>
         <p className="muted">{meta}</p>
-      </div>
-      <div className="preview-card">
-        <p className="mono">Movement proof demo</p>
-        <p>Idle / blink / breathe loop ready</p>
-        <p>Head sway + breathe loop active</p>
-        <p className="mono">Avatar reaction state</p>
-        <p>{avatarMood}</p>
-        <p className="mono">Proof status</p>
-        <p>{movementProofStatus}</p>
-        <p className="muted">Sample VRM loads → idle animation → mouth opens from test audio/amplitude → expression change on response.</p>
-        <p className="mono">Chat reaction proof</p>
-        <p>{runtimeStatus}</p>
-        <p className="muted">{assistantResponse || 'Awaiting assistant response for chat-state proof.'}</p>
-        <p className="mono">Hands/arms proof</p>
-        <p>{armProofStatus}</p>
-        <p className="muted">{armProofSummary}</p>
-        <p className="mono">Movement signal ladder</p>
-        <p>VRM → blink/breathe → head sway → mouth test → shoulder/upperArm/lowerArm/hand motion → response expression</p>
-        <ul className="proof-checklist">
-          <li>{uploadedVrmName !== 'No VRM loaded yet' ? '✅' : '⬜'} VRM load ready</li>
-          <li>✅ Blink / breathe / head movement loop</li>
-          <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') || movementProofStatus.includes('Full demo complete') || runtimeStatus.includes('mouth/expression motion') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
-          <li>{armProofStatus.includes('running') || armProofStatus.includes('complete') ? '✅' : '⬜'} Explicit shoulder / upperArm / lowerArm / hand motion proof</li>
-          <li>{runtimeStatus.includes('expression change on response') || runtimeStatus.includes('response expression latched') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
-        </ul>
         <div className="button-row">
-          <button className="secondary-button" type="button" onClick={handleRunArmMotionProof} disabled={isArmProofRunning}>
-            {isArmProofRunning ? 'Hands/arms proof running…' : 'Run hands/arms proof'}
-          </button>
-          <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
-            {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
-          </button>
-          <button className="secondary-button" type="button" onClick={onReplayChatReaction}>
-            Replay chat reaction
-          </button>
-          <button className="secondary-button" type="button" onClick={onRunIdleResetProof}>
-            Run idle reset proof
-          </button>
-          <button className="secondary-button" type="button" onClick={onRunMouthAmplitudeProof}>
-            Run mouth amplitude proof
-          </button>
-          <button className="primary-button" type="button" onClick={onRunFullDemo}>
-            Run full demo
-          </button>
+          <button className="primary-button" type="button" onClick={onRunFullDemo}>Run full demo</button>
+          {debugMode && (
+            <button className="secondary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
+              {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
+            </button>
+          )}
         </div>
-        <p className="mono">Idle reset proof</p>
-        <p>Response pose settles back to a calm idle baseline after mouth/test-audio playback.</p>
-        <p className="mono">Mouth amplitude proof</p>
-        <p>Dedicated amplitude frames visibly drive mouth-open values before easing back into the listening state.</p>
-        <p className="mono">Full demo pipeline</p>
-        <p>Sample/upload VRM → voice library → provider/mock → chat response → speech/audio → mouth and expression movement.</p>
       </div>
+      {debugMode && (
+        <div className="preview-card">
+          <p className="mono">Loaded asset</p>
+          <strong>{uploadedVrmName}</strong>
+          <p className="mono">Default sample path</p>
+          <p>{SAMPLE_PATH}</p>
+          <p className="mono">Mouth-open signal</p>
+          <p>{mouthOpen.toFixed(2)}</p>
+          <p className="mono">Render status</p>
+          <p>{renderStatus}</p>
+          <p className="muted">{meta}</p>
+          <p className="mono">Movement proof demo</p>
+          <p>Idle / blink / breathe loop ready</p>
+          <p>Head sway + breathe loop active</p>
+          <p className="mono">Avatar reaction state</p>
+          <p>{avatarMood}</p>
+          <p className="mono">Proof status</p>
+          <p>{movementProofStatus}</p>
+          <p className="muted">Sample VRM loads → idle animation → mouth opens from test audio/amplitude → expression change on response.</p>
+          <p className="mono">Chat reaction proof</p>
+          <p>{runtimeStatus}</p>
+          <p className="muted">{assistantResponse || 'Awaiting assistant response for chat-state proof.'}</p>
+          <p className="mono">Hands/arms proof</p>
+          <p>{armProofStatus}</p>
+          <p className="muted">{armProofSummary}</p>
+          <p className="mono">Movement signal ladder</p>
+          <p>VRM/GLB/glTF → blink/breathe → head sway → mouth test → shoulder/upperArm/lowerArm/hand motion where rigged → response expression</p>
+          <ul className="proof-checklist">
+            <li>{uploadedVrmName !== 'No VRM loaded yet' ? '✅' : '⬜'} Avatar load ready</li>
+            <li>✅ Blink / breathe / head movement loop</li>
+            <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') || movementProofStatus.includes('Full demo complete') || runtimeStatus.includes('mouth/expression motion') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
+            <li>{armProofStatus.includes('running') || armProofStatus.includes('complete') ? '✅' : '⬜'} Explicit shoulder / upperArm / lowerArm / hand motion proof</li>
+            <li>{runtimeStatus.includes('expression change on response') || runtimeStatus.includes('response expression latched') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
+          </ul>
+          <div className="button-row">
+            <button className="secondary-button" type="button" onClick={handleRunArmMotionProof} disabled={isArmProofRunning}>
+              {isArmProofRunning ? 'Hands/arms proof running…' : 'Run hands/arms proof'}
+            </button>
+            <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
+              {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
+            </button>
+            <button className="secondary-button" type="button" onClick={onReplayChatReaction}>Replay chat reaction</button>
+            <button className="secondary-button" type="button" onClick={onRunIdleResetProof}>Run idle reset proof</button>
+            <button className="secondary-button" type="button" onClick={onRunMouthAmplitudeProof}>Run mouth amplitude proof</button>
+          </div>
+          <p className="mono">Idle reset proof</p>
+          <p>Response pose settles back to a calm idle baseline after mouth/test-audio playback.</p>
+          <p className="mono">Mouth amplitude proof</p>
+          <p>Dedicated amplitude frames visibly drive mouth-open values before easing back into the listening state.</p>
+          <p className="mono">Full demo pipeline</p>
+          <p>Sample/upload VRM → voice library → provider/mock → chat response → speech/audio → mouth and expression movement.</p>
+        </div>
+      )}
     </section>
   )
 }

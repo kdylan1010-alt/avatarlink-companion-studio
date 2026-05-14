@@ -13,12 +13,41 @@ function summarizeVrm(vrm, fallbackName = 'unknown.vrm') {
   const expressionKeys = Object.keys(vrm?.expressionManager?.expressionMap ?? {})
   return {
     avatarName: vrm?.meta?.name || fallbackName,
+    format: 'VRM',
     specVersion: vrm?.meta?.metaVersion || vrm?.meta?.specVersion || 'unknown',
     sceneChildren: vrm?.scene?.children?.length ?? 0,
     humanoidBoneCount: humanoidBones.length,
     expressionCount: expressionKeys.length,
     expressionKeys,
   }
+}
+
+function summarizeGltf(gltf, fallbackName = 'unknown.glb') {
+  let meshCount = 0
+  gltf?.scene?.traverse?.((node) => {
+    if (node.isMesh) meshCount += 1
+  })
+  return {
+    avatarName: fallbackName,
+    format: 'glTF/GLB',
+    specVersion: 'non-VRM',
+    sceneChildren: gltf?.scene?.children?.length ?? 0,
+    humanoidBoneCount: 0,
+    expressionCount: 0,
+    expressionKeys: [],
+    meshCount,
+    animationCount: gltf?.animations?.length ?? 0,
+  }
+}
+
+function inferImportKind(name = '') {
+  const lower = name.toLowerCase()
+  if (lower.endsWith('.vrm')) return 'vrm'
+  if (lower.endsWith('.glb')) return 'glb'
+  if (lower.endsWith('.gltf')) return 'gltf'
+  if (lower.endsWith('.fbx')) return 'fbx'
+  if (lower.endsWith('.usdz')) return 'usdz'
+  return 'unknown'
 }
 
 const BASE_Y = -1.15
@@ -199,13 +228,21 @@ export async function createVrmPreview(canvas) {
   scene.add(grid)
 
   let currentVrm = null
+  let currentAvatarScene = null
+  let currentGenericScene = null
   let currentMouthOpen = 0
+  let targetMouthOpen = 0
   let currentMood = 'idle'
   let raf = 0
   let motionSeconds = 0
   let armRig = { bones: [], availableBoneLabels: [] }
   const armMotionState = createArmMotionState()
   const clock = new THREE.Clock()
+  const MOUTH_ATTACK_SPEED = 26
+  const MOUTH_RELEASE_SPEED = 9
+  const MOUTH_GRACEFUL_CLOSE_MS = 220
+  let mouthReleaseAnchor = 0
+  let mouthReleaseUntilMs = 0
 
   const applyExpressionState = () => {
     const manager = currentVrm?.expressionManager
@@ -217,6 +254,24 @@ export async function createVrmPreview(canvas) {
     manager.setValue(VRMExpressionPresetName.Relaxed, currentMood === 'listening' ? 0.28 : 0)
     manager.setValue(VRMExpressionPresetName.Happy, currentMood === 'celebrate' ? 0.55 : 0)
     manager.setValue(VRMExpressionPresetName.Surprised, currentMood === 'speaking' ? 0.18 : 0)
+  }
+
+  const updateSmoothedMouth = (delta) => {
+    const nowMs = performance.now()
+    let effectiveTarget = targetMouthOpen
+
+    if (targetMouthOpen <= 0.001 && mouthReleaseUntilMs > nowMs) {
+      const remaining = (mouthReleaseUntilMs - nowMs) / MOUTH_GRACEFUL_CLOSE_MS
+      effectiveTarget = mouthReleaseAnchor * clamp(remaining, 0, 1)
+    }
+
+    const speed = effectiveTarget > currentMouthOpen ? MOUTH_ATTACK_SPEED : MOUTH_RELEASE_SPEED
+    const alpha = 1 - Math.exp(-speed * delta)
+    currentMouthOpen += (effectiveTarget - currentMouthOpen) * alpha
+
+    if (Math.abs(effectiveTarget - currentMouthOpen) < 0.001) {
+      currentMouthOpen = effectiveTarget
+    }
   }
 
   const applyArmMotion = () => {
@@ -274,14 +329,55 @@ export async function createVrmPreview(canvas) {
     }
   }
 
+  const resetArmRig = (mode = 'not-run') => {
+    armRig = { bones: [], availableBoneLabels: [] }
+    armMotionState.active = false
+    armMotionState.snapshot = {
+      active: false,
+      availableBoneLabels: [],
+      animatedBoneCount: 0,
+      durationMs: 0,
+      mode,
+      peakDegrees: {},
+    }
+  }
+
+  const disposeCurrentAvatar = () => {
+    if (currentAvatarScene) {
+      scene.remove(currentAvatarScene)
+      VRMUtils.deepDispose(currentAvatarScene)
+    }
+    currentVrm = null
+    currentAvatarScene = null
+    currentGenericScene = null
+    resetArmRig('not-run')
+  }
+
+  const frameSceneForPreview = (object3d) => {
+    object3d.position.set(0, BASE_Y, 0)
+    object3d.rotation.set(0, 0, 0)
+    object3d.scale.setScalar(1)
+    const box = new THREE.Box3().setFromObject(object3d)
+    const size = new THREE.Vector3()
+    const center = new THREE.Vector3()
+    box.getSize(size)
+    box.getCenter(center)
+    if (Number.isFinite(size.length()) && size.length() > 0) {
+      const maxAxis = Math.max(size.x, size.y, size.z)
+      const scale = clamp(1.65 / maxAxis, 0.15, 3.2)
+      object3d.scale.setScalar(scale)
+      object3d.position.x = -center.x * scale
+      object3d.position.z = -center.z * scale
+      object3d.position.y = BASE_Y - box.min.y * scale
+    }
+  }
+
   const mountVrm = (vrm, fallbackName) => {
     if (!vrm) throw new Error('Loaded asset did not expose a VRM avatar')
-    if (currentVrm) {
-      scene.remove(currentVrm.scene)
-      VRMUtils.deepDispose(currentVrm.scene)
-    }
+    disposeCurrentAvatar()
     VRMUtils.rotateVRM0(vrm)
     currentVrm = vrm
+    currentAvatarScene = vrm.scene
     currentVrm.scene.position.set(0, BASE_Y, 0)
     currentVrm.scene.rotation.set(0, 0, 0)
     currentVrm.scene.scale.setScalar(1)
@@ -300,6 +396,17 @@ export async function createVrmPreview(canvas) {
     return summarizeVrm(vrm, fallbackName)
   }
 
+  const mountGenericGltf = (gltf, fallbackName) => {
+    if (!gltf?.scene) throw new Error('Loaded glTF/GLB did not include a scene')
+    disposeCurrentAvatar()
+    currentGenericScene = gltf.scene
+    currentAvatarScene = gltf.scene
+    frameSceneForPreview(currentGenericScene)
+    scene.add(currentGenericScene)
+    resetArmRig('generic-gltf-ready')
+    return summarizeGltf(gltf, fallbackName)
+  }
+
   const render = () => {
     raf = requestAnimationFrame(render)
     const delta = clock.getDelta()
@@ -312,8 +419,13 @@ export async function createVrmPreview(canvas) {
       currentVrm.scene.rotation.z = Math.sin(motionSeconds * 1.25) * pose.tilt
       currentVrm.scene.scale.setScalar(1 + breathe * pose.breathScale)
       applyArmMotion()
+      updateSmoothedMouth(delta)
       applyExpressionState()
       currentVrm.update(delta)
+    } else if (currentGenericScene) {
+      const pose = MOOD_POSES[currentMood] || MOOD_POSES.idle
+      currentGenericScene.rotation.y += delta * 0.22
+      currentGenericScene.rotation.z = Math.sin(motionSeconds * 1.25) * pose.tilt * 0.35
     }
     renderer.render(scene, camera)
   }
@@ -332,11 +444,22 @@ export async function createVrmPreview(canvas) {
 
   return {
     async loadFile(file) {
+      const kind = inferImportKind(file?.name)
+      if (kind === 'fbx') {
+        throw new Error('FBX import is not browser-previewed yet. Export or convert the Sketchfab original to GLB/glTF first, then upload that file here.')
+      }
+      if (kind === 'usdz') {
+        throw new Error('USDZ import is not browser-previewed yet. Use the Sketchfab GLB/glTF download or convert USDZ to GLB before uploading.')
+      }
+      if (!['vrm', 'glb', 'gltf', 'unknown'].includes(kind)) {
+        throw new Error('Unsupported avatar file. Try .vrm, .glb, or .gltf for direct preview; convert .fbx/.usdz to GLB first.')
+      }
       const loader = createLoader()
       const url = URL.createObjectURL(file)
       try {
         const gltf = await loader.loadAsync(url)
-        return mountVrm(gltf.userData.vrm, file.name)
+        if (gltf.userData?.vrm) return mountVrm(gltf.userData.vrm, file.name)
+        return mountGenericGltf(gltf, file.name)
       } finally {
         URL.revokeObjectURL(url)
       }
@@ -344,10 +467,20 @@ export async function createVrmPreview(canvas) {
     async loadUrl(url) {
       const loader = createLoader()
       const gltf = await loader.loadAsync(url)
-      return mountVrm(gltf.userData.vrm, url)
+      if (gltf.userData?.vrm) return mountVrm(gltf.userData.vrm, url)
+      return mountGenericGltf(gltf, url)
     },
     setMouthOpen(value) {
-      currentMouthOpen = Math.min(1, Math.max(0, value))
+      const clamped = Math.min(1, Math.max(0, value))
+      if (clamped > 0.001) {
+        targetMouthOpen = clamped
+        mouthReleaseAnchor = clamped
+        mouthReleaseUntilMs = 0
+      } else {
+        mouthReleaseAnchor = Math.max(currentMouthOpen, targetMouthOpen, mouthReleaseAnchor)
+        targetMouthOpen = 0
+        mouthReleaseUntilMs = performance.now() + MOUTH_GRACEFUL_CLOSE_MS
+      }
       applyExpressionState()
     },
     setAvatarMood(mood) {
@@ -375,10 +508,7 @@ export async function createVrmPreview(canvas) {
     destroy() {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
-      if (currentVrm) {
-        scene.remove(currentVrm.scene)
-        VRMUtils.deepDispose(currentVrm.scene)
-      }
+      disposeCurrentAvatar()
       renderer.dispose()
     },
   }

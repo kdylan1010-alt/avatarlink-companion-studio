@@ -262,6 +262,7 @@ export default function App() {
   const [speechStatus, setSpeechStatus] = useState('Browser/system speech is fallback only — backend TTS provider not configured yet')
   const [availableVoices, setAvailableVoices] = useState([{ id: 'browser-default', label: 'browser-default' }])
   const [isRunning, setIsRunning] = useState(false)
+  const [debugMode, setDebugMode] = useState(false)
   const cancelPlaybackRef = useRef(() => {})
   const speechUtteranceRef = useRef(null)
   const visemeTimeline = useMemo(() => starterTimeline, [])
@@ -559,24 +560,48 @@ export default function App() {
 
   return (
     <main className="shell">
-      <header className="hero human-card">
-        <p className="eyebrow">AvatarLink / Avatar Companion Studio</p>
-        <h1>No-code VRM/VTuber AI avatar companion engine</h1>
-        <p className="lede">
-          Browser-native MVP for creator-owned avatar companions: upload a VRM, shape a persona,
-          connect your own model endpoint, and prototype speech + lip-sync workflows without shipping secrets.
-        </p>
+      <header className="hero human-card hero-redesign">
+        <div>
+          <p className="eyebrow">AvatarLink / Avatar Companion Studio</p>
+          <h1>Build and test an AI avatar in four clear steps</h1>
+          <p className="lede">
+            Choose or upload an avatar, pick the model and voice path, type one message, then run the full demo.
+            Technical status panels are hidden by default so creators only see what to click next.
+          </p>
+        </div>
+        <label className="debug-toggle">
+          <input
+            type="checkbox"
+            checked={debugMode}
+            onChange={(event) => setDebugMode(event.target.checked)}
+          />
+          <span>Developer Debugging Mode</span>
+        </label>
       </header>
 
-      <SafetyOnboarding />
+      <section className="guided-flow human-card" data-testid="guided-primary-flow">
+        <div className="flow-step"><strong>1</strong><span>Upload or use sample avatar</span><small>VRM, GLB, and glTF preview now run in-browser.</small></div>
+        <div className="flow-step"><strong>2</strong><span>Pick model + voice</span><small>GitHub Models stays behind the safe proxy; browser speech is fallback-only.</small></div>
+        <div className="flow-step"><strong>3</strong><span>Type a test message</span><small>Keep the prompt simple and creator-facing.</small></div>
+        <div className="flow-step"><strong>4</strong><span>Run full demo</span><small>One button drives provider response, voice, mouth, and motion.</small></div>
+      </section>
 
-      <LeadCapturePanel />
+      {debugMode && (
+        <section className="debug-panel" data-testid="developer-debugging-mode">
+          <div className="section-head">
+            <p className="eyebrow">Developer Debugging Mode</p>
+            <h2>Advanced QA, onboarding, persona, and lead tools</h2>
+          </div>
+          <SafetyOnboarding />
+          <LeadCapturePanel />
+          <VrmSmokeTest />
+          <PersonaEditor persona={persona} onChange={setPersona} />
+        </section>
+      )}
 
-      <VrmSmokeTest />
-
-      <section className="grid two-up">
-        <PersonaEditor persona={persona} onChange={setPersona} />
+      <section className="grid two-up primary-workflow">
         <VrmStudioPanel
+          debugMode={debugMode}
           uploadedVrmName={uploadedVrmName}
           onUploadName={setUploadedVrmName}
           mouthOpen={mouthOpen}
@@ -591,10 +616,8 @@ export default function App() {
           assistantResponse={assistantResponse}
           runtimeStatus={runtimeStatus}
         />
-      </section>
-
-      <section className="grid two-up">
         <ChatWorkbench
+          debugMode={debugMode}
           persona={persona}
           modelProvider={modelProvider}
           onModelProvider={handleProviderChange}
@@ -609,12 +632,17 @@ export default function App() {
           userPrompt={userPrompt}
           onUserPrompt={setUserPrompt}
           onRunCompanion={handleRunCompanion}
+          onRunFullDemo={handleRunFullDemo}
           runtimeStatus={runtimeStatus}
           assistantResponse={assistantResponse}
           runtimeProviderLabel={runtimeProviderLabel}
           isRunning={isRunning}
         />
+      </section>
+
+      <section className="grid two-up">
         <VoicePanel
+          debugMode={debugMode}
           mouthOpen={mouthOpen}
           onMouthOpenChange={setMouthOpen}
           visemeTimeline={visemeTimeline}

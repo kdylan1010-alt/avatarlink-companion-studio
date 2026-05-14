@@ -11,6 +11,7 @@ const MODEL_SUGGESTIONS = {
 }
 
 export function ChatWorkbench({
+  debugMode = false,
   persona,
   modelProvider,
   onModelProvider,
@@ -25,6 +26,7 @@ export function ChatWorkbench({
   userPrompt,
   onUserPrompt,
   onRunCompanion,
+  onRunFullDemo,
   runtimeStatus,
   assistantResponse,
   runtimeProviderLabel,
@@ -64,20 +66,22 @@ export function ChatWorkbench({
           </div>
         )}
       </div>
-      <div className="stack">
-        <label>Provider/proxy base URL (OpenAI-compatible base URL for BYOK providers)<input value={apiBase} onChange={(e) => onApiBase(e.target.value)} spellCheck="false" /></label>
-        {!isSafeProxy && (
-          <label>API key (OpenAI-compatible browser BYOK only)<input value={apiKey} onChange={(e) => onApiKey(e.target.value)} placeholder="paste only official provider API keys for BYOK providers" type="password" spellCheck="false" /></label>
-        )}
-        {isSafeProxy && <p className="muted">API key field hidden for safe proxy providers; use server-side .env.local only.</p>}
-        <label>Model<input value={model} onChange={(e) => onModel(e.target.value)} list="avatarlink-model-suggestions" spellCheck="false" /></label>
-        <datalist id="avatarlink-model-suggestions">
-          {modelSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
-        </datalist>
-      </div>
-      <div className="preview-card">
-        <p className="mono">Provider connector status</p>
-        <pre>{`{
+      {debugMode && (
+        <>
+          <div className="stack">
+            <label>Provider/proxy base URL (OpenAI-compatible base URL for BYOK providers)<input value={apiBase} onChange={(e) => onApiBase(e.target.value)} spellCheck="false" /></label>
+            {!isSafeProxy && (
+              <label>API key (OpenAI-compatible browser BYOK only)<input value={apiKey} onChange={(e) => onApiKey(e.target.value)} placeholder="paste only official provider API keys for BYOK providers" type="password" spellCheck="false" /></label>
+            )}
+            {isSafeProxy && <p className="muted">API key field hidden for safe proxy providers; use server-side .env.local only.</p>}
+            <label>Model<input value={model} onChange={(e) => onModel(e.target.value)} list="avatarlink-model-suggestions" spellCheck="false" /></label>
+            <datalist id="avatarlink-model-suggestions">
+              {modelSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}
+            </datalist>
+          </div>
+          <div className="preview-card">
+            <p className="mono">Provider connector status</p>
+            <pre>{`{
   provider: '${providerMeta.id}',
   label: '${providerMeta.label}',
   transport: '${providerMeta.transport}',
@@ -86,11 +90,13 @@ export function ChatWorkbench({
   secretPath: '${isSafeProxy ? '.env.local server-side only' : 'browser BYOK only if entered'}',
   healthCheck: '${proxyHealthPath}'
 }`}</pre>
-      </div>
-      <div className="preview-card">
-        <p className="mono">System prompt preview</p>
-        <pre>{systemPromptPreview}</pre>
-      </div>
+          </div>
+          <div className="preview-card">
+            <p className="mono">System prompt preview</p>
+            <pre>{systemPromptPreview}</pre>
+          </div>
+        </>
+      )}
       <div className="chat-card">
         <div className="bubble bubble-avatar">{persona.opener}</div>
         <label>
@@ -100,17 +106,26 @@ export function ChatWorkbench({
         <div className="bubble bubble-user">{userPrompt}</div>
         <div className="bubble bubble-avatar">{assistantResponse || 'Assistant response will appear here after you run the companion.'}</div>
       </div>
-      <div className="preview-card">
-        <p className="mono">Companion runtime status</p>
-        <p>{runtimeStatus}</p>
-        <p className="mono">Last provider path</p>
-        <p>{runtimeProviderLabel}</p>
-        <p className="mono">Last assistant response</p>
-        <pre>{assistantResponse || 'No assistant response yet'}</pre>
+      {debugMode && (
+        <div className="preview-card">
+          <p className="mono">Companion runtime status</p>
+          <p>{runtimeStatus}</p>
+          <p className="mono">Last provider path</p>
+          <p>{runtimeProviderLabel}</p>
+          <p className="mono">Last assistant response</p>
+          <pre>{assistantResponse || 'No assistant response yet'}</pre>
+        </div>
+      )}
+      <div className="button-row">
+        <button className="primary-button" type="button" onClick={onRunFullDemo || onRunCompanion} disabled={isRunning}>
+          {isRunning ? 'Running full demo…' : 'Run full demo'}
+        </button>
+        {debugMode && (
+          <button className="secondary-button" type="button" onClick={onRunCompanion} disabled={isRunning}>
+            {isRunning ? 'Running companion…' : 'Run companion reply'}
+          </button>
+        )}
       </div>
-      <button className="primary-button" type="button" onClick={onRunCompanion} disabled={isRunning}>
-        {isRunning ? 'Running companion…' : 'Run companion reply'}
-      </button>
       <p className="muted">
         GitHub Models and Gemini use the safe local proxy with server-side env secrets. Demo mode + browser speech fallback runs end-to-end without paid TTS keys; OAuth is scaffold-only for now.
       </p>
