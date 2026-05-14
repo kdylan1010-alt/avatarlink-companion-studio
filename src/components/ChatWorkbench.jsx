@@ -37,7 +37,7 @@ export function ChatWorkbench({
   const proxyHealthPath = isSafeProxy ? `${apiBase.replace(/\/$/, '')}/health` : 'not required for browser BYOK/mock providers'
 
   return (
-    <section id="message-step" className="panel human-card" data-testid="chat-workbench">
+    <section id="message-step" className="panel human-card" data-testid="chat-workbench message-and-run-step">
       <div className="section-head">
         <p className="eyebrow">Step 3 + 4 — Message and run</p>
         <h2>Type one message, then run the demo</h2>

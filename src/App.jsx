@@ -621,68 +621,85 @@ export default function App() {
         </section>
       )}
 
-      <section className="grid two-up primary-workflow" data-testid="ordered-creator-workflow">
-        <VrmStudioPanel
-          debugMode={debugMode}
-          uploadedVrmName={uploadedVrmName}
-          onUploadName={setUploadedVrmName}
-          mouthOpen={mouthOpen}
-          avatarMood={avatarMood}
-          movementProofStatus={movementProofStatus}
-          onRunMovementProof={handleRunMovementProof}
-          onReplayChatReaction={handleReplayChatReaction}
-          onRunIdleResetProof={handleRunIdleResetProof}
-          onRunMouthAmplitudeProof={handleRunMouthAmplitudeProof}
-          onRunFullDemo={handleRunFullDemo}
-          isMovementProofRunning={isMovementProofRunning}
-          assistantResponse={assistantResponse}
-          runtimeStatus={runtimeStatus}
-        />
-        <VoicePanel
-          debugMode={debugMode}
-          mouthOpen={mouthOpen}
-          onMouthOpenChange={setMouthOpen}
-          visemeTimeline={visemeTimeline}
-          playbackStatus={playbackStatus}
-          onPlayTimeline={handlePlayTimeline}
-          audioFrameAnalysis={audioFrameAnalysis}
-          ttsFrameBridge={ttsFrameBridge}
-          liveTtsIngest={liveTtsIngest}
-          ingestToVisemePipeline={ingestToVisemePipeline}
-          providerTtsContract={providerTtsContract}
-          providerResponseMap={providerResponseMap}
-          voiceProvider={voiceProvider}
-          onVoiceProviderChange={setVoiceProvider}
-          voiceId={voiceId}
-          onVoiceIdChange={setVoiceId}
-          availableVoices={availableVoices}
-          speechStatus={speechStatus}
-        />
-      </section>
-
-      <section className="chat-focus-row" data-testid="message-and-run-step">
-        <ChatWorkbench
-          debugMode={debugMode}
-          persona={persona}
-          modelProvider={modelProvider}
-          onModelProvider={handleProviderChange}
-          providerMeta={providerMeta}
-          apiBase={apiBase}
-          apiKey={apiKey}
-          model={model}
-          onApiBase={setApiBase}
-          onApiKey={setApiKey}
-          onModel={setModel}
-          systemPromptPreview={systemPromptPreview}
-          userPrompt={userPrompt}
-          onUserPrompt={setUserPrompt}
-          onRunCompanion={handleRunCompanion}
-          onRunFullDemo={handleRunFullDemo}
-          runtimeStatus={runtimeStatus}
-          assistantResponse={assistantResponse}
-          runtimeProviderLabel={runtimeProviderLabel}
-          isRunning={isRunning}
-        />
+      <section className="studio-cockpit" data-testid="ordered-creator-workflow">
+        <div className="workflow-column">
+          <VrmStudioPanel
+            debugMode={debugMode}
+            uploadedVrmName={uploadedVrmName}
+            onUploadName={setUploadedVrmName}
+            mouthOpen={mouthOpen}
+            avatarMood={avatarMood}
+            movementProofStatus={movementProofStatus}
+            onRunMovementProof={handleRunMovementProof}
+            onReplayChatReaction={handleReplayChatReaction}
+            onRunIdleResetProof={handleRunIdleResetProof}
+            onRunMouthAmplitudeProof={handleRunMouthAmplitudeProof}
+            onRunFullDemo={handleRunFullDemo}
+            isMovementProofRunning={isMovementProofRunning}
+            assistantResponse={assistantResponse}
+            runtimeStatus={runtimeStatus}
+          />
+          <VoicePanel
+            debugMode={debugMode}
+            mouthOpen={mouthOpen}
+            onMouthOpenChange={setMouthOpen}
+            visemeTimeline={visemeTimeline}
+            playbackStatus={playbackStatus}
+            onPlayTimeline={handlePlayTimeline}
+            audioFrameAnalysis={audioFrameAnalysis}
+            ttsFrameBridge={ttsFrameBridge}
+            liveTtsIngest={liveTtsIngest}
+            ingestToVisemePipeline={ingestToVisemePipeline}
+            providerTtsContract={providerTtsContract}
+            providerResponseMap={providerResponseMap}
+            voiceProvider={voiceProvider}
+            onVoiceProviderChange={setVoiceProvider}
+            voiceId={voiceId}
+            onVoiceIdChange={setVoiceId}
+            availableVoices={availableVoices}
+            speechStatus={speechStatus}
+          />
+          <ChatWorkbench
+            debugMode={debugMode}
+            persona={persona}
+            modelProvider={modelProvider}
+            onModelProvider={handleProviderChange}
+            providerMeta={providerMeta}
+            apiBase={apiBase}
+            apiKey={apiKey}
+            model={model}
+            onApiBase={setApiBase}
+            onApiKey={setApiKey}
+            onModel={setModel}
+            systemPromptPreview={systemPromptPreview}
+            userPrompt={userPrompt}
+            onUserPrompt={setUserPrompt}
+            onRunCompanion={handleRunCompanion}
+            onRunFullDemo={handleRunFullDemo}
+            runtimeStatus={runtimeStatus}
+            assistantResponse={assistantResponse}
+            runtimeProviderLabel={runtimeProviderLabel}
+            isRunning={isRunning}
+          />
+        </div>
+        <aside className="preview-rail human-card" data-testid="sticky-preview-panel">
+          <p className="eyebrow">Live demo summary</p>
+          <h2>Ready when you are</h2>
+          <div className="summary-stack">
+            <div className="summary-row"><span>Avatar</span><strong>{uploadedVrmName}</strong></div>
+            <div className="summary-row"><span>Voice</span><strong>{voiceProvider === 'browser-speech' ? 'Fallback voice path' : 'Motion-only fallback'}</strong></div>
+            <div className="summary-row"><span>AI</span><strong>{modelProvider === 'githubModels' ? 'GPT-4 mini safe proxy' : providerMeta.label}</strong></div>
+            <div className="summary-row"><span>Message</span><strong>{userPrompt.trim() ? `${Math.min(userPrompt.trim().length, 80)} chars ready` : 'Needs text'}</strong></div>
+          </div>
+          <button className="primary-button giant-action" type="button" onClick={handleRunFullDemo} disabled={isRunning || !userPrompt.trim()}>
+            {isRunning ? 'Generating avatar demo…' : 'Run avatar demo'}
+          </button>
+          <p className="rail-status">{runtimeStatus}</p>
+          {assistantResponse && <p className="rail-response">{assistantResponse}</p>}
+          <div className="rail-tip">
+            <strong>Good UI rule applied:</strong> this page now shows the creator path first. Raw proofs, JSON, API URLs, smoke tests, and internals appear only in Developer Debugging Mode.
+          </div>
+        </aside>
       </section>
     </main>
   )
