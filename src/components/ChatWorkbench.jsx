@@ -76,7 +76,12 @@ export function ChatWorkbench({
             <p className="muted">OpenAI-compatible base URL providers are supported, but no secrets go into frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
           </>
         )}
-        {isSafeProxy && (
+        {isSafeProxy && !debugMode && (
+          <div className="status-chip" role="status">
+            AI engine ready: the recommended safe proxy is selected. Type a message below, then click Run full demo.
+          </div>
+        )}
+        {isSafeProxy && debugMode && (
           <div className="status-chip" role="status">
             Safe proxy selected: browser → local /generate endpoint → official provider chat/completions. Secrets stay in ignored .env.local; use /health to confirm key presence.
           </div>

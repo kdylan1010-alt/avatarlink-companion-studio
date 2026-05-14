@@ -56,7 +56,7 @@ const checks = [
   ['lead_delivery_bridge', source.includes('Delivery bridge payload') && source.includes('Export delivery JSON')],
   ['default_sample_vrm', source.includes('/avatars/sample.vrm')],
   ['guided_primary_flow', source.includes('Build and test an AI avatar in four clear steps') && source.includes('guided-primary-flow') && source.includes('Run full demo')],
-  ['creator_next_action', source.includes('What to click next') && source.includes('creator-next-action') && source.includes('creator-action-strip') && source.includes('1 Choose avatar') && source.includes('4 Run full demo')],
+  ['creator_next_action', source.includes('What to click next') && source.includes('creator-next-action') && source.includes('creator-action-strip') && source.includes('1 Choose avatar') && source.includes('4 Run full demo') && source.includes('Just run the demo') && source.includes('instant-demo-card')],
   ['ordered_creator_workflow', source.includes('ordered-creator-workflow') && source.includes('message-and-run-step') && source.includes('Step 3 + 4 — Message and run')],
   ['developer_debugging_mode', source.includes('Developer Debugging Mode') && source.includes('debugMode') && source.includes('developer-debugging-mode')],
   ['simple_provider_choice', source.includes('creator-provider-choice') && source.includes('Recommended: GitHub Models safe proxy') && source.includes('Turn on Developer Debugging Mode for provider URLs')],
