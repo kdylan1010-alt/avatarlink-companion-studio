@@ -1,14 +1,17 @@
 # AvatarLink Companion Studio
 
-Browser-native no-code **VRM/VTuber AI avatar companion engine** MVP.
+Browser-native no-code **AI avatar companion engine** MVP for VRM plus common Sketchfab-style GLB/glTF preview lanes.
 
 ## Product framing
 - Not an unrestricted NSFW AI girlfriend app
 - Focused on creator-owned companion avatars, coaching guides, fan-community greeters, lore bots, and character experiences
-- Browser-native VRM first; no Blender dependency in v1
+- Browser-native VRM first, with direct GLB/embedded glTF preview for common Sketchfab exports
+- FBX/USDZ are accepted in the picker as conversion-needed lanes; convert/export to GLB for reliable browser preview
 
 ## MVP scope
-- VRM upload + preview panel
+- Guided creator flow: choose/upload avatar → pick provider/voice → type message → run full demo
+- Developer Debugging Mode toggle hides raw status/proof/config panels by default
+- VRM upload + preview panel, plus direct GLB/embedded glTF preview for Sketchfab-style assets
 - Chat UI shell
 - Lead capture persisted in browser localStorage + CSV export
 - Latest lead handoff preview + follow-up draft CTA
@@ -19,6 +22,14 @@ Browser-native no-code **VRM/VTuber AI avatar companion engine** MVP.
 - Web Audio amplitude -> mouth movement stub
 - Persona editor
 - Safety + asset-rights onboarding checklist
+
+
+## Creator import flow
+- Default view is intentionally creator-facing: one guided four-step path and one primary next action.
+- Upload accepts `.vrm`, `.glb`, `.gltf`, `.fbx`, and `.usdz`.
+- Direct runtime preview is implemented for VRM, GLB, and embedded/single-file glTF.
+- FBX/USDZ and multi-file glTF exports should be converted/exported to GLB before upload.
+- Detailed format guidance lives in `docs/SKETCHFAB_IMPORT_GUIDE.md`.
 
 ## Local run
 ```bash
