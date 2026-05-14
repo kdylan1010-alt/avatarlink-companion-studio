@@ -180,28 +180,40 @@ async function requestCompanionResponse({
 
   if (modelProvider === 'githubModels' || modelProvider === 'gemini') {
     const proxyLabel = modelProvider === 'githubModels' ? 'GitHub Models' : 'Gemini'
-    const response = await fetch(`${apiBase.replace(/\/$/, '')}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, systemPrompt: systemPromptPreview, userPrompt }),
-    })
-    const data = await response.json().catch(() => ({}))
-    const blocked = data?.providerBlocked || data?.geminiBlocked
-    if (response.ok && data?.text && !data?.fallbackProvider && !blocked) {
-      return {
-        text: data.text.trim(),
-        label: `live-${modelProvider}:${data.model || model}`,
-        status: `Live ${proxyLabel} response received through safe local proxy (${data.model || model})`,
-        live: true,
+    try {
+      const response = await fetch(`${apiBase.replace(/\/$/, '')}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, systemPrompt: systemPromptPreview, userPrompt }),
+      })
+      const data = await response.json().catch(() => ({}))
+      const blocked = data?.providerBlocked || data?.geminiBlocked
+      if (response.ok && data?.text && !data?.fallbackProvider && !blocked) {
+        return {
+          text: data.text.trim(),
+          label: `live-${modelProvider}:${data.model || model}`,
+          status: `Live ${proxyLabel} response received through safe local proxy (${data.model || model})`,
+          live: true,
+        }
       }
-    }
-    const fallbackText = data?.text || data?.fallbackText || buildDemoReply(persona, userPrompt)
-    const reason = blocked?.message || data?.message || data?.error || `${proxyLabel} proxy HTTP ${response.status}`
-    return {
-      text: fallbackText,
-      label: `fallback-${modelProvider}:${data?.code || blocked?.code || response.status}`,
-      status: `${proxyLabel} blocked (${reason}); full avatar chain continued with local fallback speech/movement`,
-      live: false,
+      const fallbackText = data?.text || data?.fallbackText || buildDemoReply(persona, userPrompt)
+      const reason = blocked?.message || data?.message || data?.error || `${proxyLabel} proxy HTTP ${response.status}`
+      return {
+        text: fallbackText,
+        label: `fallback-${modelProvider}:${data?.code || blocked?.code || response.status}`,
+        status: `${proxyLabel} blocked (${reason}); full avatar chain continued with local fallback speech/movement`,
+        live: false,
+      }
+    } catch (error) {
+      const publicTunnelHint = apiBase.includes('127.0.0.1') || apiBase.includes('localhost')
+        ? 'The public tunnel cannot reach the Mac-only localhost proxy from your browser.'
+        : 'The safe proxy is unreachable from this browser session.'
+      return {
+        text: buildDemoReply(persona, userPrompt),
+        label: `fallback-${modelProvider}:network-unreachable`,
+        status: `${proxyLabel} safe proxy unavailable (${error.message}). ${publicTunnelHint} Continued with demo fallback so the full demo pipeline still completes.`,
+        live: false,
+      }
     }
   }
 
