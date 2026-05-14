@@ -586,6 +586,15 @@ export default function App() {
         <div className="flow-step"><strong>4</strong><span>Run full demo</span><small>One button drives provider response, voice, mouth, and motion.</small></div>
       </section>
 
+      <section className="next-action-card human-card" data-testid="creator-next-action">
+        <div>
+          <p className="eyebrow">What to click next</p>
+          <h2>Start with the avatar picker, then press Run full demo.</h2>
+          <p className="muted">Default mode is the creator path. Turn on Developer Debugging Mode only when you need raw JSON, provider URLs, smoke tests, or proof controls.</p>
+        </div>
+        <a className="primary-link" href="#avatar-step">Go to Step 1</a>
+      </section>
+
       {debugMode && (
         <section className="debug-panel" data-testid="developer-debugging-mode">
           <div className="section-head">

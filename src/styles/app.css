@@ -145,6 +145,39 @@ textarea {
   gap: 18px;
   margin: 20px 0;
 }
+.next-action-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 20px;
+  padding: 18px;
+  border: 1px solid rgba(146, 240, 195, .32);
+  border-radius: 20px;
+  background: rgba(15, 19, 28, .82);
+}
+.next-action-card h2 { margin: 0 0 .4rem; }
+.primary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 12px 18px;
+  color: #0b0d12;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.conversion-note {
+  margin-top: 12px;
+  border: 1px solid rgba(154, 182, 255, .34);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: #dbeafe;
+  background: rgba(59, 130, 246, .12);
+  line-height: 1.45;
+}
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -165,5 +198,7 @@ button:disabled { opacity: .58; cursor: not-allowed; }
 @media (max-width: 900px) {
   .hero-redesign { grid-template-columns: 1fr; }
   .guided-flow { grid-template-columns: 1fr; }
+  .next-action-card { align-items: stretch; flex-direction: column; }
+  .primary-link { width: max-content; }
   .debug-toggle { width: max-content; }
 }

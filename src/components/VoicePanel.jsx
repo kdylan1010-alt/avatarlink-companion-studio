@@ -27,8 +27,8 @@ export function VoicePanel({
   return (
     <section className="panel human-card" data-testid="voice-panel">
       <div className="section-head">
-        <p className="eyebrow">Voice + motion</p>
-        <h2>Natural TTS provider + mouth movement signal</h2>
+        <p className="eyebrow">Step 2 — Voice</p>
+        <h2>Choose the voice path</h2>
       </div>
       <div className="preview-card">
         <p className="mono">Voice provider</p>

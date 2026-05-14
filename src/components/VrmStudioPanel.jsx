@@ -148,7 +148,7 @@ export function VrmStudioPanel({
   }
 
   return (
-    <section className="panel human-card" data-testid="vrm-studio-panel">
+    <section id="avatar-step" className="panel human-card" data-testid="vrm-studio-panel">
       <div className="section-head">
         <p className="eyebrow">Step 1 — Avatar</p>
         <h2>Upload or preview an avatar</h2>
@@ -159,6 +159,9 @@ export function VrmStudioPanel({
         <input type="file" accept={IMPORT_ACCEPT} onChange={handleFile} />
       </label>
       <div className="status-chip" role="status">Loaded: {uploadedVrmName} • Format: {assetKind}</div>
+      <div className="conversion-note" data-testid="sketchfab-conversion-note">
+        <strong>Sketchfab format guide:</strong> upload GLB/glTF when available for instant preview. If your download is FBX or USDZ, convert/export it to GLB first; AvatarLink will show a clear conversion message instead of a broken preview.
+      </div>
       {debugMode && <button className="primary-button" type="button" onClick={handleSimulatedUpload}>Run simulated upload proof</button>}
       <div className="preview-stage">
         <canvas ref={canvasRef} className="preview-canvas" aria-label="VRM preview canvas" />

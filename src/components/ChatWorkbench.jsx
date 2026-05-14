@@ -39,8 +39,8 @@ export function ChatWorkbench({
   return (
     <section className="panel human-card" data-testid="chat-workbench">
       <div className="section-head">
-        <p className="eyebrow">Conversation</p>
-        <h2>Chat UI + safe model proxy</h2>
+        <p className="eyebrow">Step 2 + 3 — Model and message</p>
+        <h2>Pick the brain, type one message</h2>
       </div>
       <div className="preview-card">
         <p className="mono">Model provider</p>
