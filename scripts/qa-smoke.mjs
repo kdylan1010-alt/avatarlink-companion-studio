@@ -57,6 +57,7 @@ const checks = [
   ['default_sample_vrm', source.includes('/avatars/sample.vrm')],
   ['guided_primary_flow', source.includes('Build and test an AI avatar in four clear steps') && source.includes('guided-primary-flow') && source.includes('Run full demo')],
   ['creator_next_action', source.includes('What to click next') && source.includes('creator-next-action') && source.includes('creator-action-strip') && source.includes('1 Choose avatar') && source.includes('4 Run full demo')],
+  ['ordered_creator_workflow', source.includes('ordered-creator-workflow') && source.includes('message-and-run-step') && source.includes('Step 3 + 4 — Message and run')],
   ['developer_debugging_mode', source.includes('Developer Debugging Mode') && source.includes('debugMode') && source.includes('developer-debugging-mode')],
   ['multi_format_upload_ui', source.includes("const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz'") && source.includes('bundled GLB preview directly') && source.includes('sketchfab-format-lane')],
   ['sketchfab_conversion_copy', source.includes('Sketchfab format guide') && source.includes('convert/export it to GLB first') && source.includes('multi-file glTF folders should be exported as GLB') && source.includes('sketchfab-conversion-note')],

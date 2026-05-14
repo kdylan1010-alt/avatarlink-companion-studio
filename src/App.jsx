@@ -581,7 +581,7 @@ export default function App() {
 
       <section className="guided-flow human-card" data-testid="guided-primary-flow">
         <div className="flow-step"><strong>1</strong><span>Upload or use sample avatar</span><small>VRM and bundled GLB preview best; embedded glTF also works.</small></div>
-        <div className="flow-step"><strong>2</strong><span>Pick model + voice</span><small>Choose the safe AI proxy and the voice mode without touching secrets.</small></div>
+        <div className="flow-step"><strong>2</strong><span>Pick voice</span><small>Start with the default safe AI proxy; choose only the voice path unless you need debug settings.</small></div>
         <div className="flow-step"><strong>3</strong><span>Type a test message</span><small>Keep the prompt simple and creator-facing.</small></div>
         <div className="flow-step"><strong>4</strong><span>Run full demo</span><small>One button drives provider response, voice, mouth, and motion.</small></div>
       </section>
@@ -613,7 +613,7 @@ export default function App() {
         </section>
       )}
 
-      <section className="grid two-up primary-workflow">
+      <section className="grid two-up primary-workflow" data-testid="ordered-creator-workflow">
         <VrmStudioPanel
           debugMode={debugMode}
           uploadedVrmName={uploadedVrmName}
@@ -630,6 +630,29 @@ export default function App() {
           assistantResponse={assistantResponse}
           runtimeStatus={runtimeStatus}
         />
+        <VoicePanel
+          debugMode={debugMode}
+          mouthOpen={mouthOpen}
+          onMouthOpenChange={setMouthOpen}
+          visemeTimeline={visemeTimeline}
+          playbackStatus={playbackStatus}
+          onPlayTimeline={handlePlayTimeline}
+          audioFrameAnalysis={audioFrameAnalysis}
+          ttsFrameBridge={ttsFrameBridge}
+          liveTtsIngest={liveTtsIngest}
+          ingestToVisemePipeline={ingestToVisemePipeline}
+          providerTtsContract={providerTtsContract}
+          providerResponseMap={providerResponseMap}
+          voiceProvider={voiceProvider}
+          onVoiceProviderChange={setVoiceProvider}
+          voiceId={voiceId}
+          onVoiceIdChange={setVoiceId}
+          availableVoices={availableVoices}
+          speechStatus={speechStatus}
+        />
+      </section>
+
+      <section className="chat-focus-row" data-testid="message-and-run-step">
         <ChatWorkbench
           debugMode={debugMode}
           persona={persona}
@@ -651,29 +674,6 @@ export default function App() {
           assistantResponse={assistantResponse}
           runtimeProviderLabel={runtimeProviderLabel}
           isRunning={isRunning}
-        />
-      </section>
-
-      <section className="grid two-up">
-        <VoicePanel
-          debugMode={debugMode}
-          mouthOpen={mouthOpen}
-          onMouthOpenChange={setMouthOpen}
-          visemeTimeline={visemeTimeline}
-          playbackStatus={playbackStatus}
-          onPlayTimeline={handlePlayTimeline}
-          audioFrameAnalysis={audioFrameAnalysis}
-          ttsFrameBridge={ttsFrameBridge}
-          liveTtsIngest={liveTtsIngest}
-          ingestToVisemePipeline={ingestToVisemePipeline}
-          providerTtsContract={providerTtsContract}
-          providerResponseMap={providerResponseMap}
-          voiceProvider={voiceProvider}
-          onVoiceProviderChange={setVoiceProvider}
-          voiceId={voiceId}
-          onVoiceIdChange={setVoiceId}
-          availableVoices={availableVoices}
-          speechStatus={speechStatus}
         />
       </section>
     </main>

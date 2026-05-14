@@ -39,11 +39,11 @@ export function ChatWorkbench({
   return (
     <section id="message-step" className="panel human-card" data-testid="chat-workbench">
       <div className="section-head">
-        <p className="eyebrow">Step 2 + 3 — Model and message</p>
-        <h2>Pick the brain, type one message</h2>
+        <p className="eyebrow">Step 3 + 4 — Message and run</p>
+        <h2>Type one message, then run the demo</h2>
       </div>
       <div className="preview-card">
-        <p className="mono">Model provider</p>
+        <p className="mono">AI provider (default is ready)</p>
         <label>
           Model provider
           <select value={modelProvider} onChange={(e) => onModelProvider(e.target.value)}>
@@ -57,9 +57,13 @@ export function ChatWorkbench({
           </select>
         </label>
         <p className="muted">{providerMeta.authNote}</p>
-        <p className="muted">ChatGPT Free/Plus/Pro login is not the same as OpenAI API access. Use official API key/provider key only.</p>
-        <p className="muted">OAuth-ready provider connector is a generic placeholder only. Mocked until an official provider OAuth path is confirmed.</p>
-        <p className="muted">OpenAI-compatible base URL providers are supported, but no secrets go into frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
+        {debugMode && (
+          <>
+            <p className="muted">ChatGPT Free/Plus/Pro login is not the same as OpenAI API access. Use official API key/provider key only.</p>
+            <p className="muted">OAuth-ready provider connector is a generic placeholder only. Mocked until an official provider OAuth path is confirmed.</p>
+            <p className="muted">OpenAI-compatible base URL providers are supported, but no secrets go into frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
+          </>
+        )}
         {isSafeProxy && (
           <div className="status-chip" role="status">
             Safe proxy selected: browser → local /generate endpoint → official provider chat/completions. Secrets stay in ignored .env.local; use /health to confirm key presence.

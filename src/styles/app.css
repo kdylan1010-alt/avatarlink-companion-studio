@@ -209,6 +209,14 @@ textarea {
   cursor: pointer;
 }
 button:disabled { opacity: .58; cursor: not-allowed; }
+
+.chat-focus-row {
+  margin-top: 20px;
+}
+.chat-focus-row .panel {
+  max-width: 860px;
+  margin: 0 auto;
+}
 @media (max-width: 900px) {
   .hero-redesign { grid-template-columns: 1fr; }
   .guided-flow { grid-template-columns: 1fr; }
