@@ -29,7 +29,7 @@ function summarizeGltf(gltf, fallbackName = 'unknown.glb') {
   })
   return {
     avatarName: fallbackName,
-    format: 'glTF/GLB',
+    format: inferImportKind(fallbackName) === 'gltf' ? 'glTF (embedded)' : 'GLB/glTF',
     specVersion: 'non-VRM',
     sceneChildren: gltf?.scene?.children?.length ?? 0,
     humanoidBoneCount: 0,
@@ -446,13 +446,16 @@ export async function createVrmPreview(canvas) {
     async loadFile(file) {
       const kind = inferImportKind(file?.name)
       if (kind === 'fbx') {
-        throw new Error('FBX import is not browser-previewed yet. Export or convert the Sketchfab original to GLB/glTF first, then upload that file here.')
+        throw new Error('FBX import is not browser-previewed yet. Export or convert the Sketchfab original to bundled GLB first, then upload that file here.')
       }
       if (kind === 'usdz') {
-        throw new Error('USDZ import is not browser-previewed yet. Use the Sketchfab GLB/glTF download or convert USDZ to GLB before uploading.')
+        throw new Error('USDZ import is not browser-previewed yet. Use the Sketchfab GLB download or convert USDZ to bundled GLB before uploading.')
+      }
+      if (kind === 'gltf') {
+        console.info('AvatarLink glTF note: embedded/single-file glTF can preview; multi-file glTF folders should be exported as GLB for browser upload.')
       }
       if (!['vrm', 'glb', 'gltf', 'unknown'].includes(kind)) {
-        throw new Error('Unsupported avatar file. Try .vrm, .glb, or .gltf for direct preview; convert .fbx/.usdz to GLB first.')
+        throw new Error('Unsupported avatar file. Try .vrm, bundled .glb, or embedded .gltf for direct preview; convert .fbx/.usdz or multi-file glTF folders to GLB first.')
       }
       const loader = createLoader()
       const url = URL.createObjectURL(file)

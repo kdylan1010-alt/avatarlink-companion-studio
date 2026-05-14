@@ -247,7 +247,7 @@ export default function App() {
   const [apiBase, setApiBase] = useState(getProviderRuntimeDefaults('githubModels').apiBase)
   const [apiKey, setApiKey] = useState(getProviderRuntimeDefaults('githubModels').apiKey)
   const [model, setModel] = useState(getProviderRuntimeDefaults('githubModels').model)
-  const [uploadedVrmName, setUploadedVrmName] = useState('No VRM loaded yet')
+  const [uploadedVrmName, setUploadedVrmName] = useState('No avatar loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
   const [userPrompt, setUserPrompt] = useState('Draft a welcome scene for a first-time fan.')
@@ -580,8 +580,8 @@ export default function App() {
       </header>
 
       <section className="guided-flow human-card" data-testid="guided-primary-flow">
-        <div className="flow-step"><strong>1</strong><span>Upload or use sample avatar</span><small>VRM, GLB, and glTF preview now run in-browser.</small></div>
-        <div className="flow-step"><strong>2</strong><span>Pick model + voice</span><small>GitHub Models stays behind the safe proxy; browser speech is fallback-only.</small></div>
+        <div className="flow-step"><strong>1</strong><span>Upload or use sample avatar</span><small>VRM and bundled GLB preview best; embedded glTF also works.</small></div>
+        <div className="flow-step"><strong>2</strong><span>Pick model + voice</span><small>Choose the safe AI proxy and the voice mode without touching secrets.</small></div>
         <div className="flow-step"><strong>3</strong><span>Type a test message</span><small>Keep the prompt simple and creator-facing.</small></div>
         <div className="flow-step"><strong>4</strong><span>Run full demo</span><small>One button drives provider response, voice, mouth, and motion.</small></div>
       </section>

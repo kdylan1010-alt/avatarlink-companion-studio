@@ -152,15 +152,20 @@ export function VrmStudioPanel({
       <div className="section-head">
         <p className="eyebrow">Step 1 — Avatar</p>
         <h2>Upload or preview an avatar</h2>
-        <p className="muted">Use the built-in sample, or choose a Sketchfab-style export. VRM, GLB, and glTF preview directly; FBX/USDZ are accepted for clear conversion guidance.</p>
+        <p className="muted">Use the built-in sample, or choose a Sketchfab-style export. VRM and bundled GLB preview directly; embedded glTF can preview when its buffers/textures are included; FBX/USDZ show clear conversion guidance.</p>
       </div>
       <label className="upload-box">
         <span>Choose avatar file (.vrm, .glb, .gltf, .fbx, .usdz)</span>
+        <small>Best Sketchfab path: download GLB. If Sketchfab gives FBX/USDZ, convert to GLB first.</small>
         <input type="file" accept={IMPORT_ACCEPT} onChange={handleFile} />
       </label>
       <div className="status-chip" role="status">Loaded: {uploadedVrmName} • Format: {assetKind}</div>
       <div className="conversion-note" data-testid="sketchfab-conversion-note">
-        <strong>Sketchfab format guide:</strong> upload GLB/glTF when available for instant preview. If your download is FBX or USDZ, convert/export it to GLB first; AvatarLink will show a clear conversion message instead of a broken preview.
+        <strong>Sketchfab format guide:</strong> upload bundled GLB first for instant preview. Embedded glTF is supported, but multi-file glTF folders should be exported as GLB before upload. If your download is FBX or USDZ, convert/export it to GLB first; AvatarLink will show a clear conversion message instead of a broken preview.
+      </div>
+      <div className="format-lane" data-testid="sketchfab-format-lane">
+        <span>Direct preview: VRM, GLB, embedded glTF</span>
+        <span>Conversion needed: FBX, USDZ, multi-file glTF folders</span>
       </div>
       {debugMode && <button className="primary-button" type="button" onClick={handleSimulatedUpload}>Run simulated upload proof</button>}
       <div className="preview-stage">
@@ -208,7 +213,7 @@ export function VrmStudioPanel({
           <p className="mono">Movement signal ladder</p>
           <p>VRM/GLB/glTF → blink/breathe → head sway → mouth test → shoulder/upperArm/lowerArm/hand motion where rigged → response expression</p>
           <ul className="proof-checklist">
-            <li>{uploadedVrmName !== 'No VRM loaded yet' ? '✅' : '⬜'} Avatar load ready</li>
+            <li>{uploadedVrmName !== 'No avatar loaded yet' ? '✅' : '⬜'} Avatar load ready</li>
             <li>✅ Blink / breathe / head movement loop</li>
             <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') || movementProofStatus.includes('Full demo complete') || runtimeStatus.includes('mouth/expression motion') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
             <li>{armProofStatus.includes('running') || armProofStatus.includes('complete') ? '✅' : '⬜'} Explicit shoulder / upperArm / lowerArm / hand motion proof</li>

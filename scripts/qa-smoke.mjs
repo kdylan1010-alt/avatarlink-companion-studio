@@ -10,6 +10,7 @@ const source = [
   '../src/components/LeadCapturePanel.jsx',
   '../src/components/VrmSmokeTest.jsx',
   '../src/components/VoicePanel.jsx',
+  '../src/lib/vrmRuntime.js',
 ].map((path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 const css = fs.readFileSync(new URL('../src/styles/app.css', import.meta.url), 'utf8')
 const envExample = fs.readFileSync(new URL('../.env.example', import.meta.url), 'utf8')
@@ -57,8 +58,9 @@ const checks = [
   ['guided_primary_flow', source.includes('Build and test an AI avatar in four clear steps') && source.includes('guided-primary-flow') && source.includes('Run full demo')],
   ['creator_next_action', source.includes('What to click next') && source.includes('creator-next-action') && source.includes('Go to Step 1')],
   ['developer_debugging_mode', source.includes('Developer Debugging Mode') && source.includes('debugMode') && source.includes('developer-debugging-mode')],
-  ['multi_format_upload_ui', source.includes("const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz'") && source.includes('VRM, GLB, and glTF preview directly')],
-  ['sketchfab_conversion_copy', source.includes('Sketchfab format guide') && source.includes('convert/export it to GLB first') && source.includes('sketchfab-conversion-note')],
+  ['multi_format_upload_ui', source.includes("const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz'") && source.includes('bundled GLB preview directly') && source.includes('sketchfab-format-lane')],
+  ['sketchfab_conversion_copy', source.includes('Sketchfab format guide') && source.includes('convert/export it to GLB first') && source.includes('multi-file glTF folders should be exported as GLB') && source.includes('sketchfab-conversion-note')],
+  ['gltf_loader_runtime', source.includes('loadFile(file)') && source.includes('bundled .glb') && source.includes('embedded .gltf') && source.includes('multi-file glTF folders')],
   ['simulated_upload_proof', source.includes('Run simulated upload proof') && source.includes('simulated upload')],
   ['movement_proof_demo', source.includes('Movement proof demo') && source.includes('Run movement proof demo')],
   ['movement_reaction_states', source.includes('Idle / blink / breathe loop ready') && source.includes('Avatar reaction state') && source.includes('expression change on response')],
