@@ -589,10 +589,15 @@ export default function App() {
       <section className="next-action-card human-card" data-testid="creator-next-action">
         <div>
           <p className="eyebrow">What to click next</p>
-          <h2>Start with the avatar picker, then press Run full demo.</h2>
+          <h2>Follow the guided action bar from left to right.</h2>
           <p className="muted">Default mode is the creator path. Turn on Developer Debugging Mode only when you need raw JSON, provider URLs, smoke tests, or proof controls.</p>
+          <div className="creator-action-strip" data-testid="creator-action-strip">
+            <a className="primary-link" href="#avatar-step">1 Choose avatar</a>
+            <a className="secondary-link" href="#voice-step">2 Pick voice</a>
+            <a className="secondary-link" href="#message-step">3 Type message</a>
+            <a className="secondary-link" href="#message-step">4 Run full demo</a>
+          </div>
         </div>
-        <a className="primary-link" href="#avatar-step">Go to Step 1</a>
       </section>
 
       {debugMode && (

@@ -25,7 +25,7 @@ export function VoicePanel({
   const suggestedMouthOpen = amplitudeToMouthOpen(derivedAmplitude)
 
   return (
-    <section className="panel human-card" data-testid="voice-panel">
+    <section id="voice-step" className="panel human-card" data-testid="voice-panel">
       <div className="section-head">
         <p className="eyebrow">Step 2 — Voice</p>
         <h2>Choose the voice path</h2>

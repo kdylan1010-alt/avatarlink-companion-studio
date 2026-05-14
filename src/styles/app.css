@@ -157,17 +157,31 @@ textarea {
   background: rgba(15, 19, 28, .82);
 }
 .next-action-card h2 { margin: 0 0 .4rem; }
-.primary-link {
+.creator-action-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+  margin-top: .9rem;
+}
+.primary-link,
+.secondary-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   padding: 12px 18px;
-  color: #0b0d12;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
   font-weight: 800;
   text-decoration: none;
   white-space: nowrap;
+}
+.primary-link {
+  color: #0b0d12;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+.secondary-link {
+  color: var(--text);
+  border: 1px solid rgba(148, 163, 184, .34);
+  background: rgba(15, 23, 42, .72);
 }
 .conversion-note {
   margin-top: 12px;
