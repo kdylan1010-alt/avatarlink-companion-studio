@@ -3,6 +3,7 @@ import { amplitudeToMouthOpen, normalizeAmplitude } from '../lib/audioAmplitude'
 export function VoicePanel({
   debugMode = false,
   mouthOpen,
+  mouthViseme = 'aa',
   onMouthOpenChange,
   visemeTimeline,
   playbackStatus,
@@ -35,6 +36,9 @@ export function VoicePanel({
         <label>
           Voice provider
           <select value={voiceProvider} onChange={(event) => onVoiceProviderChange(event.target.value)}>
+            <option value="elevenlabs">ElevenLabs API voice (natural TTS via safe proxy)</option>
+            <option value="openai">OpenAI API voice (natural TTS via safe proxy)</option>
+            <option value="cartesia">Cartesia API voice (natural TTS via safe proxy)</option>
             <option value="browser-speech">browser-speech (fallback only — not final)</option>
             <option value="motion-only-fallback">motion-only-fallback (no audio fallback)</option>
           </select>
@@ -51,7 +55,7 @@ export function VoicePanel({
       </div>
       <div className="preview-card">
         <p className="mono">Voice preview</p>
-        <p>Current mode: {voiceProvider}. Backend natural TTS remains the final path; browser/system speech is fallback-only.</p>
+        <p>Current mode: {voiceProvider}. API modes call the backend TTS proxy; browser/system speech is fallback-only.</p>
         <button className="secondary-button" type="button" onClick={onPlayTimeline}>Preview silent mouth timing</button>
       </div>
       {debugMode && (
@@ -69,6 +73,7 @@ export function VoicePanel({
             <p className="mono">Amplitude → mouth-open mapping</p>
             <p>Demo RMS amplitude: {derivedAmplitude.toFixed(2)}</p>
             <p>Suggested mouth-open: {suggestedMouthOpen.toFixed(2)}</p>
+            <p>Current viseme target: {mouthViseme}</p>
             <label>
               Mouth-open preview
               <input
@@ -122,7 +127,7 @@ export function VoicePanel({
         <div className="meter meter-3"></div>
         <div className="meter meter-4"></div>
       </div>
-      <p className="muted">Current browser/system speech is fallback-only. Final voice should come from a backend TTS provider endpoint such as /api/tts/elevenlabs, /api/tts/openai, or /api/tts/cartesia so secrets stay server-side.</p>
+      <p className="muted">API voice uses backend endpoints /api/tts/elevenlabs, /api/tts/openai, or /api/tts/cartesia. If an API key/voice is missing, the UI now reports the exact failure instead of silently falling back.</p>
     </section>
   )
 }

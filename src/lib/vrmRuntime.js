@@ -159,6 +159,15 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 const smoothstep = (t) => t * t * (3 - 2 * t)
 const toDegrees = (rad) => Math.round((rad * 180 / Math.PI) * 10) / 10
 
+const VISEME_PRESET_MAP = {
+  aa: VRMExpressionPresetName.Aa,
+  ih: VRMExpressionPresetName.Ih,
+  ou: VRMExpressionPresetName.Ou,
+  ee: VRMExpressionPresetName.Ee,
+  oh: VRMExpressionPresetName.Oh,
+}
+
+
 function captureArmBones(vrm) {
   const humanoid = vrm?.humanoid
   if (!humanoid?.getNormalizedBoneNode) {
@@ -270,6 +279,10 @@ export async function createVrmPreview(canvas) {
   let currentGenericScene = null
   let currentMouthOpen = 0
   let targetMouthOpen = 0
+  let targetMouthViseme = 'aa'
+  const currentMouthWeights = { aa: 0, ih: 0, ou: 0, ee: 0, oh: 0 }
+  const targetMouthWeights = { aa: 0, ih: 0, ou: 0, ee: 0, oh: 0 }
+  let gazeTarget = null
   let currentMood = 'idle'
   let raf = 0
   let motionSeconds = 0
@@ -282,16 +295,39 @@ export async function createVrmPreview(canvas) {
   let mouthReleaseAnchor = 0
   let mouthReleaseUntilMs = 0
 
+  const expressionName = (preset, fallback) => preset || fallback
+
+  const safeSetExpression = (manager, preset, fallback, value) => {
+    try {
+      manager.setValue(expressionName(preset, fallback), clamp(value, 0, 1))
+    } catch {
+      try { manager.setValue(fallback, clamp(value, 0, 1)) } catch {}
+    }
+  }
+
+  const updateMouthTargets = () => {
+    for (const key of Object.keys(targetMouthWeights)) targetMouthWeights[key] = 0
+    const open = clamp(targetMouthOpen, 0, 0.9)
+    if (open <= 0.001) return
+    const viseme = targetMouthViseme || 'aa'
+    targetMouthWeights[viseme] = open
+    if (viseme !== 'aa') targetMouthWeights.aa = Math.max(targetMouthWeights.aa, open * 0.28)
+  }
+
   const applyExpressionState = () => {
     const manager = currentVrm?.expressionManager
     if (!manager) return
 
-    const blinkPulse = Math.max(0, Math.sin(motionSeconds * 2.4)) ** 24
-    manager.setValue(VRMExpressionPresetName.Aa, currentMouthOpen)
-    manager.setValue(VRMExpressionPresetName.Blink, blinkPulse)
-    manager.setValue(VRMExpressionPresetName.Relaxed, currentMood === 'listening' ? 0.28 : 0)
-    manager.setValue(VRMExpressionPresetName.Happy, currentMood === 'celebrate' ? 0.55 : 0)
-    manager.setValue(VRMExpressionPresetName.Surprised, currentMood === 'speaking' ? 0.18 : 0)
+    const blinkPulse = Math.max(0, Math.sin(motionSeconds * 1.7)) ** 36
+    safeSetExpression(manager, VRMExpressionPresetName.Aa, 'aa', currentMouthWeights.aa)
+    safeSetExpression(manager, VRMExpressionPresetName.Ih, 'ih', currentMouthWeights.ih)
+    safeSetExpression(manager, VRMExpressionPresetName.Ou, 'ou', currentMouthWeights.ou)
+    safeSetExpression(manager, VRMExpressionPresetName.Ee, 'ee', currentMouthWeights.ee)
+    safeSetExpression(manager, VRMExpressionPresetName.Oh, 'oh', currentMouthWeights.oh)
+    safeSetExpression(manager, VRMExpressionPresetName.Blink, 'blink', blinkPulse)
+    safeSetExpression(manager, VRMExpressionPresetName.Relaxed, 'relaxed', currentMood === 'listening' ? 0.18 : 0)
+    safeSetExpression(manager, VRMExpressionPresetName.Happy, 'happy', currentMood === 'celebrate' ? 0.42 : 0)
+    safeSetExpression(manager, VRMExpressionPresetName.Surprised, 'surprised', currentMood === 'speaking' ? 0.08 : 0)
   }
 
   const updateSmoothedMouth = (delta) => {
@@ -309,6 +345,15 @@ export async function createVrmPreview(canvas) {
 
     if (Math.abs(effectiveTarget - currentMouthOpen) < 0.001) {
       currentMouthOpen = effectiveTarget
+    }
+
+    updateMouthTargets()
+    for (const key of Object.keys(currentMouthWeights)) {
+      const desired = targetMouthWeights[key] || 0
+      const weightSpeed = desired > currentMouthWeights[key] ? MOUTH_ATTACK_SPEED : MOUTH_RELEASE_SPEED
+      const weightAlpha = 1 - Math.exp(-weightSpeed * delta)
+      currentMouthWeights[key] += (desired - currentMouthWeights[key]) * weightAlpha
+      if (Math.abs(desired - currentMouthWeights[key]) < 0.001) currentMouthWeights[key] = desired
     }
   }
 
@@ -419,6 +464,11 @@ export async function createVrmPreview(canvas) {
     currentVrm.scene.position.set(0, BASE_Y, 0)
     currentVrm.scene.rotation.set(0, 0, 0)
     currentVrm.scene.scale.setScalar(1)
+    if (gazeTarget) scene.remove(gazeTarget)
+    gazeTarget = new THREE.Object3D()
+    gazeTarget.position.set(0, 1.45, 0.9)
+    scene.add(gazeTarget)
+    if (currentVrm.lookAt) currentVrm.lookAt.target = gazeTarget
     armRig = captureArmBones(currentVrm)
     armMotionState.active = false
     armMotionState.snapshot = {
@@ -452,10 +502,14 @@ export async function createVrmPreview(canvas) {
     if (currentVrm) {
       const pose = MOOD_POSES[currentMood] || MOOD_POSES.idle
       const breathe = (Math.sin(motionSeconds * 2.6) + 1) / 2
-      currentVrm.scene.position.y = BASE_Y + Math.sin(motionSeconds * 1.8) * pose.bob
-      currentVrm.scene.rotation.y = Math.sin(motionSeconds * pose.turnSpeed) * pose.sway
-      currentVrm.scene.rotation.z = Math.sin(motionSeconds * 1.25) * pose.tilt
-      currentVrm.scene.scale.setScalar(1 + breathe * pose.breathScale)
+      // Do not fake speech by bobbling/rotating the whole avatar root.
+      // Visible speech now comes from VRM mouth expressions; body root stays planted.
+      currentVrm.scene.position.y = BASE_Y
+      currentVrm.scene.rotation.set(0, 0, 0)
+      currentVrm.scene.scale.setScalar(1 + breathe * Math.min(pose.breathScale, 0.006))
+      if (gazeTarget) {
+        gazeTarget.position.set(Math.sin(motionSeconds * 0.55) * 0.08, 1.42 + Math.sin(motionSeconds * 0.8) * 0.035, 0.9)
+      }
       applyArmMotion()
       updateSmoothedMouth(delta)
       applyExpressionState()
@@ -535,8 +589,9 @@ export async function createVrmPreview(canvas) {
       if (gltf.userData?.vrm) return mountVrm(gltf.userData.vrm, url)
       return mountGenericGltf(gltf, url)
     },
-    setMouthOpen(value) {
+    setMouthOpen(value, viseme = 'aa') {
       const clamped = Math.min(1, Math.max(0, value))
+      if (['aa', 'ih', 'ou', 'ee', 'oh'].includes(viseme)) targetMouthViseme = viseme
       if (clamped > 0.001) {
         targetMouthOpen = clamped
         mouthReleaseAnchor = clamped

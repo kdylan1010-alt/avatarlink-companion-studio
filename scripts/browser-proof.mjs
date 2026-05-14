@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
@@ -52,6 +53,45 @@ function maybeFile(root, rel) {
   return full;
 }
 
+function httpGetJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, json: JSON.parse(body || '{}') }); }
+        catch (error) { reject(error); }
+      });
+    });
+    req.on('error', reject);
+  });
+}
+
+async function ensureLocalProxy() {
+  const healthUrl = 'http://127.0.0.1:8787/api/tts/health';
+  try {
+    const existing = await httpGetJson(healthUrl);
+    if (existing.status === 200) return { proc: null, reused: true };
+  } catch {}
+
+  const proc = spawn(process.execPath, [path.join(repo, 'scripts/gemini-proxy.mjs')], {
+    cwd: repo,
+    stdio: 'ignore',
+    env: process.env,
+  });
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const health = await httpGetJson(healthUrl);
+      if (health.status === 200) return { proc, reused: false };
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  proc.kill('SIGTERM');
+  throw new Error('Local proxy did not become ready on 127.0.0.1:8787');
+}
+
 let port = requestedPort;
 const server = http.createServer((req, res) => {
   try {
@@ -84,6 +124,7 @@ const server = http.createServer((req, res) => {
   const armScreenshotPath = path.join(artifactsDir, 'avatarlink-arm-motion-proof.png');
   const armJsonPath = path.join(artifactsDir, 'avatarlink-arm-motion-proof.json');
   const startedAt = new Date().toISOString();
+  const proxyHandle = await ensureLocalProxy();
   await new Promise((resolve) => server.listen(requestedPort, host, resolve));
   port = server.address().port;
   const browser = await chromium.launch({ headless: true, channel: 'chrome' });
@@ -117,6 +158,11 @@ const server = http.createServer((req, res) => {
         }
       };
     });
+
+    const debugToggle = page.getByLabel(/Developer Debugging Mode/i).first();
+    await debugToggle.waitFor({ state: 'visible', timeout: 30000 });
+    const isChecked = await debugToggle.isChecked();
+    if (!isChecked) await debugToggle.check();
 
     const armButton = page.getByRole('button', { name: /Run hands\/arms proof/i }).first();
     await armButton.waitFor({ state: 'visible', timeout: 30000 });
@@ -232,6 +278,7 @@ const server = http.createServer((req, res) => {
   } finally {
     await browser.close().catch(() => {});
     await new Promise((resolve) => server.close(resolve));
+    if (proxyHandle?.proc) proxyHandle.proc.kill('SIGTERM');
   }
 })().catch((err) => {
   console.error(err?.stack || err);

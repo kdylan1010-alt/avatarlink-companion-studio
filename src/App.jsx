@@ -91,6 +91,60 @@ const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge
 const starterContract = buildProviderTtsContract({})
 const starterResponseMap = buildProviderResponseMap(starterContract)
 
+const TTS_PROXY_BASE = import.meta.env.VITE_TTS_PROXY_BASE || 'http://127.0.0.1:8787/api/tts'
+const API_VOICE_PROVIDERS = new Set(['elevenlabs', 'openai', 'cartesia'])
+const VOWEL_TO_VISEME = {
+  a: 'aa',
+  e: 'ee',
+  i: 'ih',
+  o: 'oh',
+  u: 'ou',
+}
+
+function pickViseme(token = '', index = 0) {
+  const lower = token.toLowerCase()
+  const vowel = [...lower].find((char) => VOWEL_TO_VISEME[char])
+  if (vowel) return VOWEL_TO_VISEME[vowel]
+  return ['aa', 'ih', 'ou', 'ee', 'oh'][index % 5]
+}
+
+function base64ToBlob(base64, mimeType = 'audio/mpeg') {
+  const binary = window.atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return new Blob([bytes], { type: mimeType })
+}
+
+async function fetchApiTtsAudio({ provider, text, voiceId }) {
+  const endpoint = `${TTS_PROXY_BASE.replace(/\/$/, '')}/${provider}`
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 45000)
+  let response
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.length > 180 ? `${text.slice(0, 177)}…` : text, voiceId: voiceId === 'browser-default' ? undefined : voiceId }),
+      signal: controller.signal,
+    })
+  } finally {
+    window.clearTimeout(timeout)
+  }
+  const contentType = response.headers.get('content-type') || ''
+  const data = contentType.includes('application/json') ? await response.json().catch(() => ({})) : {}
+  if (!response.ok || !data?.ok) {
+    throw new Error(data?.message || data?.error || `${provider} TTS HTTP ${response.status}`)
+  }
+  if (!data.audioBase64) throw new Error(`${provider} TTS returned metadata without playable audio`)
+  return {
+    blob: base64ToBlob(data.audioBase64, data.contentType || 'audio/mpeg'),
+    provider: data.provider || provider,
+    voiceName: data.voiceName || data.voiceId || provider,
+    bytes: data.bytes || 0,
+    endpoint,
+  }
+}
+
 const PROVIDER_ENV_DEFAULTS = {
   mock: {
     apiBase: PROVIDER_PRESETS.mock.apiBase,
@@ -154,9 +208,18 @@ function buildDemoReply(persona, userPrompt) {
 }
 
 function buildSpeechFrames(text) {
-  const tokens = text.split(/\s+/).filter(Boolean).slice(0, 10)
-  const values = tokens.length ? tokens.map((token, index) => Number((0.15 + ((token.length + index) % 5) * 0.14).toFixed(2))) : [0.18, 0.26, 0.34, 0.22]
-  return buildVisemeTimeline(values)
+  const tokens = text.split(/\s+/).filter(Boolean).slice(0, 28)
+  if (!tokens.length) return buildVisemeTimeline([0.18, 0.26, 0.34, 0.22]).map((frame, index) => ({ ...frame, viseme: ['aa', 'ih', 'ou', 'ee'][index % 4] }))
+  return tokens.map((token, index) => {
+    const vowelCount = (token.match(/[aeiou]/gi) || []).length
+    const amplitude = Number(Math.min(0.86, 0.18 + token.length * 0.045 + vowelCount * 0.08 + (index % 2) * 0.05).toFixed(2))
+    return {
+      timeMs: index * 95,
+      mouthOpen: amplitude,
+      viseme: pickViseme(token, index),
+      token,
+    }
+  })
 }
 
 async function requestCompanionResponse({
@@ -261,6 +324,7 @@ export default function App() {
   const [model, setModel] = useState(getProviderRuntimeDefaults('githubModels').model)
   const [uploadedVrmName, setUploadedVrmName] = useState('No avatar loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
+  const [mouthViseme, setMouthViseme] = useState('aa')
   const [playbackStatus, setPlaybackStatus] = useState('Idle — playback helper ready')
   const [userPrompt, setUserPrompt] = useState('Draft a welcome scene for a first-time fan.')
   const [assistantResponse, setAssistantResponse] = useState('')
@@ -269,9 +333,9 @@ export default function App() {
   const [avatarMood, setAvatarMood] = useState('idle')
   const [movementProofStatus, setMovementProofStatus] = useState('Idle / blink / breathe loop ready')
   const [isMovementProofRunning, setIsMovementProofRunning] = useState(false)
-  const [voiceProvider, setVoiceProvider] = useState('browser-speech')
+  const [voiceProvider, setVoiceProvider] = useState('elevenlabs')
   const [voiceId, setVoiceId] = useState('browser-default')
-  const [speechStatus, setSpeechStatus] = useState('Browser/system speech is fallback only — backend TTS provider not configured yet')
+  const [speechStatus, setSpeechStatus] = useState('API-only voice path armed — backend TTS provider selected; browser/system speech remains fallback-only and is not used in API mode')
   const [availableVoices, setAvailableVoices] = useState([{ id: 'browser-default', label: 'browser-default' }])
   const [isRunning, setIsRunning] = useState(false)
   const [debugMode, setDebugMode] = useState(false)
@@ -323,7 +387,7 @@ export default function App() {
     setAvatarMood('speaking')
     setPlaybackStatus(`Playing viseme timeline preview from ${ttsFrameBridge.source}`)
     cancelPlaybackRef.current = playVisemeTimeline(visemeTimeline, (frame) => {
-      setMouthOpen(frame.mouthOpen)
+      applyMouthFrame(frame)
       setPlaybackStatus(`Playing frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
     }, ttsFrameBridge.frameMs)
     const totalMs = Math.max(ttsFrameBridge.frameMs, visemeTimeline.length * ttsFrameBridge.frameMs + 20)
@@ -337,17 +401,92 @@ export default function App() {
     return `You are ${persona.name}. Tone: ${persona.tone}. Boundaries: ${persona.boundaries}. Opening style: ${persona.opener}`
   }, [persona])
 
-  const speakWithFallback = (text, options = {}) => {
+  const applyMouthFrame = (frame) => {
+    setMouthOpen(frame.mouthOpen)
+    setMouthViseme(frame.viseme || 'aa')
+  }
+
+  const playApiAudioWithLipSync = async ({ blob, text }) => {
+    const timeline = buildSpeechFrames(text)
+    cancelPlaybackRef.current = playVisemeTimeline(timeline, (frame) => {
+      applyMouthFrame(frame)
+      setPlaybackStatus(`API voice lip-sync ${frame.viseme || 'aa'} at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 95)
+
+    const objectUrl = URL.createObjectURL(blob)
+    const audio = new Audio(objectUrl)
+    audio.preload = 'auto'
+    audio.muted = true
+    audio.volume = 0
+    const metadata = await new Promise((resolve) => {
+      let settled = false
+      const finish = (eventName) => {
+        if (settled) return
+        settled = true
+        window.clearTimeout(timer)
+        resolve({
+          eventName,
+          canplay: eventName === 'canplay' || eventName === 'loadedmetadata',
+          duration: Number.isFinite(audio.duration) ? Number(audio.duration.toFixed(2)) : null,
+        })
+      }
+      const timer = window.setTimeout(() => finish('metadata-timeout'), 3500)
+      audio.addEventListener('canplay', () => finish('canplay'), { once: true })
+      audio.addEventListener('loadedmetadata', () => finish('loadedmetadata'), { once: true })
+      audio.addEventListener('error', () => finish('metadata-error'), { once: true })
+      audio.load()
+    })
+
+    if (navigator.webdriver) {
+      URL.revokeObjectURL(objectUrl)
+      return { skipped: true, reason: 'browser-preview-no-speaker-playback', ...metadata }
+    }
+
+    audio.muted = false
+    audio.volume = 1
+    audio.onended = () => {
+      setAvatarMood('celebrate')
+      applyMouthFrame({ mouthOpen: 0, viseme: 'aa' })
+      window.setTimeout(() => setAvatarMood('idle'), 900)
+      URL.revokeObjectURL(objectUrl)
+    }
+    await audio.play()
+    return { skipped: false, ...metadata }
+  }
+
+  const speakWithFallback = async (text, options = {}) => {
     cancelPlaybackRef.current?.()
     setAvatarMood('speaking')
     const timeline = buildSpeechFrames(text)
     cancelPlaybackRef.current = playVisemeTimeline(timeline, (frame) => {
-      setMouthOpen(frame.mouthOpen)
-      setPlaybackStatus(`Speaking frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
-    }, 140)
+      applyMouthFrame(frame)
+      setPlaybackStatus(`Speaking ${frame.viseme || 'aa'} frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
+    }, 95)
+
+    if (API_VOICE_PROVIDERS.has(voiceProvider)) {
+      try {
+        setSpeechStatus(`Calling ${voiceProvider} API voice through safe backend proxy…`)
+        const audio = await fetchApiTtsAudio({ provider: voiceProvider, text, voiceId })
+        const playback = await playApiAudioWithLipSync({ blob: audio.blob, text })
+        const mediaProof = `canplay=${playback.canplay ? 'yes' : 'no'} duration=${playback.duration ?? 'unknown'}s`
+        setSpeechStatus(playback.skipped
+          ? `${audio.provider} API voice generated ${audio.bytes} bytes (${audio.voiceName}); ${mediaProof}; playback skipped only in automated preview, lip-sync proof still ran`
+          : `${audio.provider} API voice speaking via ${audio.voiceName} (${audio.bytes} bytes; ${mediaProof})`)
+        if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
+        if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
+        return
+      } catch (error) {
+        setSpeechStatus(`${voiceProvider} API voice failed: ${error.message}. Browser/bot voice fallback was NOT used.`)
+        setPlaybackStatus('API voice failed clearly — no fake browser voice fallback; real mouth-expression timeline still ran silently')
+        if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
+        if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
+        window.setTimeout(() => setAvatarMood('idle'), 900)
+        return
+      }
+    }
 
     if (voiceProvider !== 'browser-speech') {
-      setSpeechStatus('Motion-only fallback selected — avatar reaction proof ran without browser speech audio')
+      setSpeechStatus('Motion-only fallback selected — no audio; real VRM mouth-expression timeline ran without browser speech')
       if (options.finalMovementProofStatus) setMovementProofStatus(options.finalMovementProofStatus)
       if (options.finalRuntimeStatus) setRuntimeStatus(options.finalRuntimeStatus)
       window.setTimeout(() => setAvatarMood('celebrate'), 160)
@@ -405,7 +544,7 @@ export default function App() {
 
     const proofTimeline = buildVisemeTimeline([0.1, 0.2, 0.58, 0.24, 0.68, 0.3, 0.78, 0.22, 0.12])
     cancelPlaybackRef.current = playVisemeTimeline(proofTimeline, (frame) => {
-      setMouthOpen(frame.mouthOpen)
+      applyMouthFrame(frame)
       setAvatarMood(frame.mouthOpen > 0.45 ? 'speaking' : 'listening')
       setPlaybackStatus(`Movement proof frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
     }, 120)
@@ -431,7 +570,7 @@ export default function App() {
 
     const replayTimeline = buildVisemeTimeline([0.14, 0.36, 0.62, 0.2, 0.52, 0.18])
     cancelPlaybackRef.current = playVisemeTimeline(replayTimeline, (frame) => {
-      setMouthOpen(frame.mouthOpen)
+      applyMouthFrame(frame)
       setAvatarMood(frame.mouthOpen > 0.4 ? 'speaking' : 'listening')
       setPlaybackStatus(`Replay chat reaction frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
     }, 140)
@@ -458,7 +597,7 @@ export default function App() {
 
     const resetTimeline = buildVisemeTimeline([0.22, 0.44, 0.16, 0.08, 0.02])
     cancelPlaybackRef.current = playVisemeTimeline(resetTimeline, (frame) => {
-      setMouthOpen(frame.mouthOpen)
+      applyMouthFrame(frame)
       setAvatarMood(frame.mouthOpen > 0.18 ? 'listening' : 'idle')
       setPlaybackStatus(`Idle reset proof frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
     }, 150)
@@ -485,7 +624,7 @@ export default function App() {
 
     const amplitudeTimeline = buildVisemeTimeline([0.06, 0.18, 0.42, 0.71, 0.54, 0.29, 0.11])
     cancelPlaybackRef.current = playVisemeTimeline(amplitudeTimeline, (frame) => {
-      setMouthOpen(frame.mouthOpen)
+      applyMouthFrame(frame)
       setAvatarMood(frame.mouthOpen > 0.32 ? 'speaking' : 'listening')
       setPlaybackStatus(`Mouth amplitude proof frame at ${frame.timeMs}ms → mouth ${frame.mouthOpen.toFixed(2)}`)
     }, 130)
@@ -524,7 +663,7 @@ export default function App() {
 
       setAssistantResponse(responseText)
       setRuntimeProviderLabel(providerLabel)
-      speakWithFallback(responseText, {
+      await speakWithFallback(responseText, {
         finalMovementProofStatus: 'Full demo complete — VRM + voice + provider/mock + chat + speech + mouth movement chain visible',
         finalRuntimeStatus: 'Full demo complete — user message produced a spoken response and drove avatar mouth/expression motion',
       })
@@ -559,7 +698,7 @@ export default function App() {
 
       setAssistantResponse(responseText)
       setRuntimeProviderLabel(providerLabel)
-      speakWithFallback(responseText)
+      await speakWithFallback(responseText)
     } catch (error) {
       setRuntimeStatus(`Runtime call failed: ${error.message}`)
       setRuntimeProviderLabel(`${providerMeta.id}:live-call-failed`)
@@ -654,6 +793,7 @@ export default function App() {
           <VoicePanel
             debugMode={debugMode}
             mouthOpen={mouthOpen}
+            mouthViseme={mouthViseme}
             onMouthOpenChange={setMouthOpen}
             visemeTimeline={visemeTimeline}
             playbackStatus={playbackStatus}
@@ -699,7 +839,7 @@ export default function App() {
           <h2>Ready when you are</h2>
           <div className="summary-stack">
             <div className="summary-row"><span>Avatar</span><strong>{uploadedVrmName}</strong></div>
-            <div className="summary-row"><span>Voice</span><strong>{voiceProvider === 'browser-speech' ? 'Fallback voice path' : 'Motion-only fallback'}</strong></div>
+            <div className="summary-row"><span>Voice</span><strong>{voiceProvider === 'browser-speech' ? 'Fallback voice path' : API_VOICE_PROVIDERS.has(voiceProvider) ? `${voiceProvider} API voice` : 'Motion-only fallback'}</strong></div>
             <div className="summary-row"><span>AI</span><strong>{modelProvider === 'githubModels' ? 'GPT-4 mini safe proxy' : providerMeta.label}</strong></div>
             <div className="summary-row"><span>Message</span><strong>{userPrompt.trim() ? `${Math.min(userPrompt.trim().length, 80)} chars ready` : 'Needs text'}</strong></div>
           </div>

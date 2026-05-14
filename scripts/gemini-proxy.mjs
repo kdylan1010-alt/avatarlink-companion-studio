@@ -23,6 +23,10 @@ function loadLocalEnv() {
 
 loadLocalEnv()
 
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function jsonResponse(res, status, payload) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
@@ -192,6 +196,7 @@ async function createTtsResult({ provider, response, ext, voiceId, voiceName, en
     httpStatus: response.status,
     contentType: response.headers.get('content-type') || 'application/octet-stream',
     audioPath,
+    audioBase64: bytes.toString('base64'),
     bytes: bytes.length,
     durationMs,
     format,
@@ -387,13 +392,21 @@ const server = http.createServer(async (req, res) => {
     })
   }
   if (req.url === '/api/tts/elevenlabs' && req.method === 'POST') {
-    try {
-      const payload = await readJson(req)
-      const result = await callElevenLabsTts(payload)
-      return jsonResponse(res, result.ok ? 200 : result.httpStatus || 503, result)
-    } catch (error) {
-      return jsonResponse(res, 500, { ok: false, provider: 'elevenlabs', code: 'ELEVENLABS_PROXY_ERROR', message: redactSecretText(error.message), endpoint: '/api/tts/elevenlabs' })
+    const payload = await readJson(req)
+    let lastError = null
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const result = await callElevenLabsTts(payload)
+        if (result.ok || !/fetch failed|network|terminated|socket|timeout/i.test(result.message || '')) {
+          return jsonResponse(res, result.ok ? 200 : result.httpStatus || 503, { ...result, retryAttempt: attempt })
+        }
+        lastError = new Error(result.message || 'ElevenLabs transient failure')
+      } catch (error) {
+        lastError = error
+      }
+      if (attempt < 2) await sleepMs(1200)
     }
+    return jsonResponse(res, 500, { ok: false, provider: 'elevenlabs', code: 'ELEVENLABS_PROXY_ERROR', message: redactSecretText(lastError?.message || 'fetch failed after retry'), endpoint: '/api/tts/elevenlabs', retryAttempt: 2 })
   }
   if (req.url === '/api/tts/openai' && req.method === 'POST') {
     try {

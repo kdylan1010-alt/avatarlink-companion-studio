@@ -9,6 +9,7 @@ export function VrmStudioPanel({
   uploadedVrmName,
   onUploadName,
   mouthOpen,
+  mouthViseme = 'aa',
   avatarMood,
   movementProofStatus,
   onRunMovementProof,
@@ -36,7 +37,7 @@ export function VrmStudioPanel({
     async function boot() {
       if (!canvasRef.current) return
       runtimeRef.current = await createVrmPreview(canvasRef.current)
-      runtimeRef.current.setMouthOpen(mouthOpen)
+      runtimeRef.current.setMouthOpen(mouthOpen, 'aa')
       runtimeRef.current.setAvatarMood(avatarMood)
       const result = await runtimeRef.current.loadUrl(SAMPLE_PATH)
       console.log('Default sample VRM loaded', result)
@@ -66,8 +67,8 @@ export function VrmStudioPanel({
   }, [onUploadName])
 
   useEffect(() => {
-    runtimeRef.current?.setMouthOpen(mouthOpen)
-  }, [mouthOpen])
+    runtimeRef.current?.setMouthOpen(mouthOpen, mouthViseme)
+  }, [mouthOpen, mouthViseme])
 
   useEffect(() => {
     runtimeRef.current?.setAvatarMood(avatarMood)
