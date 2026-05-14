@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createVrmPreview } from '../lib/vrmRuntime'
 
-const SAMPLE_PATH = '/avatars/sample.vrm'
+const SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/sample.vrm`
 
 export function VrmSmokeTest() {
   const canvasRef = useRef(null)
