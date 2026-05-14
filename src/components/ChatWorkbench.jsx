@@ -43,22 +43,34 @@ export function ChatWorkbench({
         <h2>Type one message, then run the demo</h2>
       </div>
       <div className="preview-card">
-        <p className="mono">AI provider (default is ready)</p>
-        <label>
-          Model provider
-          <select value={modelProvider} onChange={(e) => onModelProvider(e.target.value)}>
-            <option value="mock">Mock / test mode (no paid key required)</option>
-            <option value="openrouter">OpenRouter (OpenAI-compatible, supports :free models)</option>
-            <option value="githubModels">GitHub Models (safe local proxy, recommended)</option>
-            <option value="gemini">Gemini API key (free-tier friendly scaffold)</option>
-            <option value="ollama">Local Ollama (dev/local)</option>
-            <option value="openai">Official OpenAI API key / project</option>
-            <option value="oauthReady">OAuth-ready provider connector</option>
-          </select>
-        </label>
-        <p className="muted">{providerMeta.authNote}</p>
+        <p className="mono">AI engine</p>
+        {!debugMode && (
+          <div className="creator-provider-choice" data-testid="creator-provider-choice">
+            <label>
+              Simple mode
+              <select value={modelProvider === 'githubModels' ? 'githubModels' : 'mock'} onChange={(e) => onModelProvider(e.target.value)}>
+                <option value="githubModels">Recommended: GitHub Models safe proxy</option>
+                <option value="mock">Demo mode: local mock reply</option>
+              </select>
+            </label>
+            <p className="muted">Most creators should leave this on the recommended safe proxy, type a message below, then click Run full demo. Turn on Developer Debugging Mode for provider URLs, model IDs, and advanced connectors.</p>
+          </div>
+        )}
         {debugMode && (
           <>
+            <label>
+              Model provider
+              <select value={modelProvider} onChange={(e) => onModelProvider(e.target.value)}>
+                <option value="mock">Mock / test mode (no paid key required)</option>
+                <option value="openrouter">OpenRouter (OpenAI-compatible, supports :free models)</option>
+                <option value="githubModels">GitHub Models (safe local proxy, recommended)</option>
+                <option value="gemini">Gemini API key (free-tier friendly scaffold)</option>
+                <option value="ollama">Local Ollama (dev/local)</option>
+                <option value="openai">Official OpenAI API key / project</option>
+                <option value="oauthReady">OAuth-ready provider connector</option>
+              </select>
+            </label>
+            <p className="muted">{providerMeta.authNote}</p>
             <p className="muted">ChatGPT Free/Plus/Pro login is not the same as OpenAI API access. Use official API key/provider key only.</p>
             <p className="muted">OAuth-ready provider connector is a generic placeholder only. Mocked until an official provider OAuth path is confirmed.</p>
             <p className="muted">OpenAI-compatible base URL providers are supported, but no secrets go into frontend builds. See docs/MODEL_PROVIDERS.md for safe provider notes and .env.example callback placeholders.</p>
@@ -107,6 +119,7 @@ export function ChatWorkbench({
           User test message
           <textarea value={userPrompt} onChange={(e) => onUserPrompt(e.target.value)} rows={4} />
         </label>
+        <p className="click-hint">Next click: <strong>Run full demo</strong> to generate the reply, animate the face, and play the selected voice path.</p>
         <div className="bubble bubble-user">{userPrompt}</div>
         <div className="bubble bubble-avatar">{assistantResponse || 'Assistant response will appear here after you run the companion.'}</div>
       </div>

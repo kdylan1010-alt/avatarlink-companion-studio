@@ -237,3 +237,17 @@ button:disabled { opacity: .58; cursor: not-allowed; }
   font-size: .9rem;
 }
 .upload-box small { color: var(--muted); line-height: 1.35; }
+
+.creator-provider-choice {
+  display: grid;
+  gap: .75rem;
+}
+.click-hint {
+  margin: .35rem 0 .8rem;
+  padding: 10px 12px;
+  border: 1px solid rgba(146, 240, 195, .28);
+  border-radius: 14px;
+  background: rgba(20, 184, 166, .1);
+  color: #dcfce7;
+  line-height: 1.4;
+}

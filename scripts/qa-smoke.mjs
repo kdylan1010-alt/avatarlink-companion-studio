@@ -59,6 +59,8 @@ const checks = [
   ['creator_next_action', source.includes('What to click next') && source.includes('creator-next-action') && source.includes('creator-action-strip') && source.includes('1 Choose avatar') && source.includes('4 Run full demo')],
   ['ordered_creator_workflow', source.includes('ordered-creator-workflow') && source.includes('message-and-run-step') && source.includes('Step 3 + 4 — Message and run')],
   ['developer_debugging_mode', source.includes('Developer Debugging Mode') && source.includes('debugMode') && source.includes('developer-debugging-mode')],
+  ['simple_provider_choice', source.includes('creator-provider-choice') && source.includes('Recommended: GitHub Models safe proxy') && source.includes('Turn on Developer Debugging Mode for provider URLs')],
+  ['run_demo_click_hint', source.includes('Next click:') && source.includes('Run full demo') && source.includes('animate the face')],
   ['multi_format_upload_ui', source.includes("const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz'") && source.includes('bundled GLB preview directly') && source.includes('sketchfab-format-lane')],
   ['sketchfab_conversion_copy', source.includes('Sketchfab format guide') && source.includes('convert/export it to GLB first') && source.includes('multi-file glTF folders should be exported as GLB') && source.includes('sketchfab-conversion-note')],
   ['gltf_loader_runtime', source.includes('loadFile(file)') && source.includes('bundled .glb') && source.includes('embedded .gltf') && source.includes('multi-file glTF folders')],
