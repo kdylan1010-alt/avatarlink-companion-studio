@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createVrmPreview } from '../lib/vrmRuntime'
 
 const SAMPLE_PATH = '/avatars/sample.vrm'
-const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz'
+const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz,.zip'
 
 export function VrmStudioPanel({
   debugMode = false,
@@ -100,6 +100,35 @@ export function VrmStudioPanel({
     const file = event.target.files?.[0]
     if (!file) return
     await loadFromFile(file, 'manual upload')
+    event.target.value = ''
+  }
+
+  const handleFolder = async (event) => {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) return
+    const entry = files.find((file) => ['.glb', '.vrm'].some((ext) => file.name.toLowerCase().endsWith(ext)))
+      || files.find((file) => file.name.toLowerCase().endsWith('.gltf'))
+    const folderName = files[0]?.webkitRelativePath?.split('/')?.[0] || 'Sketchfab folder'
+    onUploadName(entry?.webkitRelativePath || entry?.name || folderName)
+    setRenderStatus(`Loading ${folderName} folder — looking for GLB/VRM/glTF plus textures…`)
+
+    try {
+      const result = await runtimeRef.current?.loadFileBundle(files)
+      setAssetKind(result?.format || 'avatar folder')
+      setMeta(`${result?.avatarName || folderName} • ${result?.format || 'avatar'} ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
+      setRenderStatus(`${result?.format || 'Avatar'} preview rendered from unzipped Sketchfab folder`)
+      const snapshot = runtimeRef.current?.getArmMotionSnapshot?.()
+      if (snapshot?.availableBoneLabels?.length) {
+        setArmProofSummary(`Ready bones: ${snapshot.availableBoneLabels.join(', ')}`)
+      }
+    } catch (error) {
+      console.error('Folder avatar upload failed', error)
+      setAssetKind('Unsupported or failed folder import')
+      setMeta('Avatar metadata unavailable')
+      setRenderStatus(`Folder upload failed: ${error.message}`)
+    } finally {
+      event.target.value = ''
+    }
   }
 
   const handleSimulatedUpload = async () => {
@@ -154,14 +183,24 @@ export function VrmStudioPanel({
         <h2>Upload or preview an avatar</h2>
         <p className="muted">Use the built-in sample, or choose a Sketchfab-style export. VRM and bundled GLB preview directly; embedded glTF can preview when its buffers/textures are included; FBX/USDZ show clear conversion guidance.</p>
       </div>
-      <label className="upload-box">
-        <span>Choose avatar file (.vrm, .glb, .gltf, .fbx, .usdz)</span>
-        <small>Best Sketchfab path: download GLB. If Sketchfab gives FBX/USDZ, convert to GLB first.</small>
-        <input type="file" accept={IMPORT_ACCEPT} onChange={handleFile} />
-      </label>
+      <div className="upload-choice-grid">
+        <label className="upload-box">
+          <span>Choose one avatar file (.vrm, .glb, .gltf, .fbx, .usdz, .zip)</span>
+          <small>Best Sketchfab path: upload the GLB file if the download includes one. Zip files must be unzipped first.</small>
+          <input type="file" accept={IMPORT_ACCEPT} onChange={handleFile} />
+        </label>
+        <label className="upload-box folder-upload-box">
+          <span>Choose Sketchfab folder</span>
+          <small>If Sketchfab gave you a zip/folder, unzip it, click this, then select the folder containing scene.gltf, .bin, and textures.</small>
+          <input type="file" webkitdirectory="true" directory="true" multiple onChange={handleFolder} />
+        </label>
+      </div>
+      <div className="zip-help-card" data-testid="sketchfab-folder-zip-upload-guide">
+        <strong>Have a Sketchfab zip?</strong> Do this: 1) unzip it, 2) click <b>Choose Sketchfab folder</b>, 3) select the unzipped folder. If the zip contains a single <code>.glb</code>, use <b>Choose one avatar file</b> instead.
+      </div>
       <div className="status-chip" role="status">Loaded: {uploadedVrmName} • Format: {assetKind}</div>
       <div className="conversion-note" data-testid="sketchfab-conversion-note">
-        <strong>Sketchfab format guide:</strong> upload bundled GLB first for instant preview. Embedded glTF is supported, but multi-file glTF folders should be exported as GLB before upload. If your download is FBX or USDZ, convert/export it to GLB first; AvatarLink will show a clear conversion message instead of a broken preview.
+        <strong>Sketchfab format guide:</strong> upload bundled GLB first for instant preview. Embedded glTF and unzipped glTF folders can preview when the .gltf, .bin, and texture files are selected together through Choose Sketchfab folder. If your download is FBX or USDZ, convert/export it to GLB first; AvatarLink will show a clear conversion message instead of a broken preview.
       </div>
       <div className="format-lane" data-testid="sketchfab-format-lane">
         <span>Direct preview: VRM, GLB, embedded glTF</span>

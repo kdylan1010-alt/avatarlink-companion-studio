@@ -2,8 +2,8 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, VRMUtils, VRMExpressionPresetName, VRMHumanBoneName } from '@pixiv/three-vrm'
 
-function createLoader() {
-  const loader = new GLTFLoader()
+function createLoader(manager) {
+  const loader = new GLTFLoader(manager)
   loader.register((parser) => new VRMLoaderPlugin(parser))
   return loader
 }
@@ -38,6 +38,44 @@ function summarizeGltf(gltf, fallbackName = 'unknown.glb') {
     meshCount,
     animationCount: gltf?.animations?.length ?? 0,
   }
+}
+
+
+function buildBundleUrlMap(files = []) {
+  const map = new Map()
+  const objectUrls = []
+  for (const file of files) {
+    const rel = file.webkitRelativePath || file.name
+    const url = URL.createObjectURL(file)
+    objectUrls.push(url)
+    map.set(rel, url)
+    map.set(file.name, url)
+    map.set(rel.split('/').pop(), url)
+  }
+  return { map, objectUrls }
+}
+
+function pickBundleEntry(files = []) {
+  const list = Array.from(files)
+  const direct = list.find((file) => ['vrm', 'glb'].includes(inferImportKind(file.name)))
+  if (direct) return direct
+  return list.find((file) => inferImportKind(file.name) === 'gltf')
+}
+
+function createBundleLoader(files = []) {
+  const { map, objectUrls } = buildBundleUrlMap(files)
+  const manager = new THREE.LoadingManager()
+  manager.setURLModifier((url) => {
+    const clean = decodeURIComponent(String(url).split('?')[0].split('#')[0])
+    const candidates = [clean, clean.replace(/^\.\//, ''), clean.split('/').pop()]
+    for (const candidate of candidates) {
+      if (map.has(candidate)) return map.get(candidate)
+      const match = [...map.entries()].find(([key]) => key.endsWith(`/${candidate}`))
+      if (match) return match[1]
+    }
+    return url
+  })
+  return { loader: createLoader(manager), objectUrls }
 }
 
 function inferImportKind(name = '') {
@@ -445,6 +483,9 @@ export async function createVrmPreview(canvas) {
   return {
     async loadFile(file) {
       const kind = inferImportKind(file?.name)
+      if (kind === 'unknown' && file?.name?.toLowerCase?.().endsWith('.zip')) {
+        throw new Error('Zip uploads are not unpacked in the browser yet. Unzip the Sketchfab download, then use “Choose Sketchfab folder” and select the folder that contains scene.gltf/bin/textures — or upload the .glb file if Sketchfab provided one.')
+      }
       if (kind === 'fbx') {
         throw new Error('FBX import is not browser-previewed yet. Export or convert the Sketchfab original to bundled GLB first, then upload that file here.')
       }
@@ -465,6 +506,27 @@ export async function createVrmPreview(canvas) {
         return mountGenericGltf(gltf, file.name)
       } finally {
         URL.revokeObjectURL(url)
+      }
+    },
+    async loadFileBundle(files) {
+      const list = Array.from(files || [])
+      const entry = pickBundleEntry(list)
+      if (!entry) {
+        throw new Error('No previewable avatar found in that folder. Select the unzipped Sketchfab folder that contains a .glb, .vrm, or .gltf plus its .bin/textures.')
+      }
+      const kind = inferImportKind(entry.name)
+      if (['fbx', 'usdz'].includes(kind)) {
+        throw new Error('That folder only contains FBX/USDZ for the main model. Convert/export the Sketchfab asset to GLB first, then upload the GLB or unzipped GLB folder.')
+      }
+      const { loader, objectUrls } = createBundleLoader(list)
+      const rel = entry.webkitRelativePath || entry.name
+      const entryUrl = objectUrls[list.indexOf(entry)] || URL.createObjectURL(entry)
+      try {
+        const gltf = await loader.loadAsync(entryUrl)
+        if (gltf.userData?.vrm) return mountVrm(gltf.userData.vrm, rel)
+        return mountGenericGltf(gltf, rel)
+      } finally {
+        objectUrls.forEach((url) => URL.revokeObjectURL(url))
       }
     },
     async loadUrl(url) {
