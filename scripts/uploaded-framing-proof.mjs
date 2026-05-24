@@ -121,13 +121,23 @@ const server = http.createServer((req, res) => {
     const projectedCenterY = Number(result.framing?.projected?.center?.[1] ?? Number.NaN)
     const projectedBottomY = Number(result.framing?.projected?.bottom?.[1] ?? Number.NaN)
 
+    const boxMinY = Number(result.framing?.boxMin?.[1] ?? Number.NaN)
+    const boxMaxY = Number(result.framing?.boxMax?.[1] ?? Number.NaN)
+    const upperBodyLookAtMin = Number.isFinite(boxMinY) && Number.isFinite(sizeY)
+      ? boxMinY + sizeY * 0.62
+      : Number.NaN
+
     const checks = {
       uploadLoaded: /loaded|rendered|glb|gltf/i.test(JSON.stringify(result.loadResult || {})),
-      portraitDistance: Number.isFinite(cameraZ) && cameraZ <= 0.95,
-      upperBodyTarget: Number.isFinite(lookAtY) && lookAtY >= 0.99,
+      // The FOV-fit portrait camera should show the top/head inside the viewport and crop
+      // lower body below the fold. It should not use a close-distance thigh crop.
+      portraitDistance: Number.isFinite(cameraZ) && cameraZ >= 1.05 && cameraZ <= 3.1,
+      upperBodyTarget: Number.isFinite(lookAtY) && Number.isFinite(upperBodyLookAtMin) && lookAtY >= upperBodyLookAtMin,
       projectedOrder: [projectedTopY, projectedCenterY, projectedBottomY].every(Number.isFinite)
         && projectedTopY > projectedCenterY
         && projectedCenterY > projectedBottomY,
+      headVisible: Number.isFinite(projectedTopY) && projectedTopY <= 0.95 && projectedTopY >= -0.35,
+      lowerBodyCropped: Number.isFinite(projectedBottomY) && projectedBottomY < -1.0,
       validHeight: Number.isFinite(sizeY) && sizeY > 1.0,
     }
     const passed = Object.values(checks).every(Boolean)
@@ -146,6 +156,9 @@ const server = http.createServer((req, res) => {
         projectedTopY,
         projectedCenterY,
         projectedBottomY,
+        boxMinY,
+        boxMaxY,
+        upperBodyLookAtMin,
       },
       consoleTail: consoleLines.slice(-40),
       ...result,

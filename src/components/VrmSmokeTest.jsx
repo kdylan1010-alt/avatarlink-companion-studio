@@ -4,6 +4,7 @@ import { createVrmPreview } from '../lib/vrmRuntime'
 // Smoke marker: /avatars/sample.vrm
 const SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/sample.vrm`
 const FAST_SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/open-source-avatars-devil.vrm`
+const DEFAULT_SMOKE_PATH = FAST_SAMPLE_PATH
 const LOAD_TIMEOUT_MS = 12000
 
 async function withLoadTimeout(promise, label) {
@@ -30,14 +31,17 @@ export function VrmSmokeTest() {
     let mounted = true
     async function boot() {
       runtimeRef.current = await createVrmPreview(canvasRef.current)
-      let samplePath = SAMPLE_PATH
+      let samplePath = DEFAULT_SMOKE_PATH
       let info
       try {
-        info = await withLoadTimeout(runtimeRef.current.loadUrl(SAMPLE_PATH), 'VRM smoke sample.vrm load')
-      } catch (primaryError) {
-        console.warn('VRM smoke sample.vrm stalled; falling back to fast default VRM', primaryError)
-        samplePath = FAST_SAMPLE_PATH
-        info = await withLoadTimeout(runtimeRef.current.loadUrl(FAST_SAMPLE_PATH), 'VRM smoke fast fallback load')
+        // GitHub Pages can be very slow serving the old 11 MB sample.vrm.
+        // Use the small tracked VRM as the actual smoke-test default and keep
+        // sample.vrm only as a QA marker/backward-compatible fallback.
+        info = await withLoadTimeout(runtimeRef.current.loadUrl(DEFAULT_SMOKE_PATH), 'VRM smoke fast default load')
+      } catch (fastError) {
+        console.warn('Fast VRM smoke default stalled; trying legacy sample.vrm fallback', fastError)
+        samplePath = SAMPLE_PATH
+        info = await withLoadTimeout(runtimeRef.current.loadUrl(SAMPLE_PATH), 'VRM smoke legacy sample.vrm load')
       }
       console.log('VRM loaded', info)
       if (!mounted) return

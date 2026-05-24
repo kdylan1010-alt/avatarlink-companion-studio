@@ -4,6 +4,7 @@ import { createVrmPreview } from '../lib/vrmRuntime'
 // Smoke marker: /avatars/sample.vrm
 const SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/sample.vrm`
 const FAST_SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/open-source-avatars-devil.vrm`
+const DEFAULT_AVATAR_PATH = FAST_SAMPLE_PATH
 const LOAD_TIMEOUT_MS = 12000
 
 async function withLoadTimeout(promise, label) {
@@ -65,14 +66,16 @@ export function VrmStudioPanel({
       try {
         setRenderStatus('Loading default avatar…')
         let result
-        let loadedPath = SAMPLE_PATH
+        let loadedPath = DEFAULT_AVATAR_PATH
         try {
+          // Prefer the small default VRM on hosted pages; the legacy 11 MB sample.vrm
+          // is kept as a fallback/QA marker but is too slow for a reliable first paint.
+          result = await withLoadTimeout(runtime.loadUrl(DEFAULT_AVATAR_PATH), 'Fast default VRM load')
+          console.log('Fast default VRM loaded', result)
+        } catch (fastError) {
+          console.warn('Fast default VRM stalled; falling back to legacy sample.vrm', fastError)
+          loadedPath = SAMPLE_PATH
           result = await withLoadTimeout(runtime.loadUrl(SAMPLE_PATH), 'Default sample.vrm load')
-          console.log('Default sample VRM loaded', result)
-        } catch (primaryError) {
-          console.warn('Default sample.vrm stalled; falling back to fast default VRM', primaryError)
-          loadedPath = FAST_SAMPLE_PATH
-          result = await withLoadTimeout(runtime.loadUrl(FAST_SAMPLE_PATH), 'Fast default VRM load')
         }
         onUploadName(loadedPath.endsWith('sample.vrm') ? 'sample.vrm' : 'open-source-avatars-devil.vrm')
         if (mounted) {

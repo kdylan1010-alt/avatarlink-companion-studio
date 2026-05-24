@@ -1151,6 +1151,14 @@ export async function createVrmPreview(canvas) {
     const center = new THREE.Vector3()
     box.getSize(size)
     box.getCenter(center)
+    const fitDistanceForVerticalSpan = (span, fill = 0.72, min = 0.9, max = 3.2) => {
+      // Three.js portrait framing: distance is driven by the vertical span we want visible,
+      // not by full-model width. This avoids T-pose arm span and skirt/thigh bounds dragging
+      // Sketchfab characters into a thigh-only crop.
+      const safeSpan = Math.max(0.22, span)
+      const fovRad = THREE.MathUtils.degToRad(camera.fov)
+      return clamp((safeSpan * 0.5) / (Math.tan(fovRad * 0.5) * fill) + size.z * 0.28, min, max)
+    }
     if (Number.isFinite(size.length()) && size.length() > 0) {
       // Lock the creator preview to a portrait / upper-body framing.
       // VRM mesh bounds can sit around the skirt/thigh mesh while humanoid bones
@@ -1188,18 +1196,36 @@ export async function createVrmPreview(canvas) {
         const focusX = faceAnchor.x * 0.78 + neckAnchor.x * 0.22
         const focusY = faceAnchor.y * 0.82 + neckAnchor.y * 0.18
         const focusZ = faceAnchor.z * 0.78 + neckAnchor.z * 0.22
-        const shoulderSpan = Math.max(Math.abs(size.x), 0.55)
         const headToChest = Math.max(0.28, Math.abs(head.y - torso.y))
-        const distance = clamp(Math.max(headToChest * 2.65, shoulderSpan * 1.05) + size.z * 0.18, 0.92, 1.42)
-        previewLookAt.set(focusX, focusY, focusZ)
-        camera.position.set(focusX, focusY + bodyHeight * 0.012, focusZ + distance)
+        const portraitTop = head.y + headToChest * 0.32
+        const portraitBottom = torso.y - headToChest * 0.38
+        const portraitSpan = Math.max(0.42, portraitTop - portraitBottom)
+        const portraitCenterY = (portraitTop + portraitBottom) * 0.5
+        const distance = fitDistanceForVerticalSpan(portraitSpan, 0.74, 1.05, 2.35)
+        previewLookAt.set(focusX, portraitCenterY * 0.86 + focusY * 0.14, focusZ)
+        camera.position.set(focusX, previewLookAt.y + bodyHeight * 0.01, focusZ + distance)
       } else {
         const bones = currentAvatarDiagnostics?.raw?.bones || []
-        const named = (rules) => bones.find((bone) => rules.some((rule) => rule.test(String(bone.name || '')))) || null
-        const genericHead = named([/(^|[^a-z])head([^a-z]|$)/i, /face/i])
-        const genericNeck = named([/(^|[^a-z])neck([^a-z]|$)/i])
-        const genericChest = named([/upper.?chest/i, /chest/i, /spine2/i, /spine_?02/i, /spine/i])
-        const genericHips = named([/(^|[^a-z])hips?([^a-z]|$)/i, /pelvis/i])
+        const boneWorldEntries = bones
+          .map((bone) => {
+            const world = new THREE.Vector3()
+            bone.getWorldPosition(world)
+            const token = normalizeBoneToken(bone.name || '')
+            return { bone, world, token, name: String(bone.name || '') }
+          })
+          .filter((entry) => Number.isFinite(entry.world.y) && !/(finger|thumb|toe|weapon|sword|skirt|cloth|cape|coat|hair|twintail|pony|accessory)/i.test(entry.name))
+        const named = (rules, tokens = []) => bones.find((bone) => {
+          const name = String(bone.name || '')
+          const token = normalizeBoneToken(name)
+          return rules.some((rule) => rule.test(name)) || tokens.some((part) => token.includes(part))
+        }) || null
+        const upperNamedBone = boneWorldEntries
+          .filter((entry) => entry.world.y > box.min.y + size.y * 0.55)
+          .sort((a, b) => b.world.y - a.world.y)[0]?.bone || null
+        const genericHead = named([/(^|[^a-z])head([^a-z]|$)/i, /face/i], ['head', 'face']) || upperNamedBone
+        const genericNeck = named([/(^|[^a-z])neck([^a-z]|$)/i], ['neck'])
+        const genericChest = named([/upper.?chest/i, /chest/i, /spine2/i, /spine_?02/i, /spine/i], ['upperchest', 'chest', 'spine2', 'spine02', 'spine'])
+        const genericHips = named([/(^|[^a-z])hips?([^a-z]|$)/i, /pelvis/i], ['hips', 'hip', 'pelvis'])
         if (genericHead && (genericNeck || genericChest || genericHips)) {
           const worldOf = (node) => {
             const v = new THREE.Vector3()
@@ -1210,24 +1236,31 @@ export async function createVrmPreview(canvas) {
           const supportAnchor = worldOf(genericNeck || genericChest || genericHips)
           const torsoAnchor = worldOf(genericChest || genericHips || genericNeck)
           // Generic Sketchfab rigs frequently arrive in a T-pose, so full width is dominated by
-          // outstretched arms. Bias the crop to the head/chest column and frame roughly the top
-          // 60% of the model rather than treating arm span as the main zoom signal.
-          const focusX = faceAnchor.x * 0.9 + supportAnchor.x * 0.1
-          const focusY = faceAnchor.y * 0.92 + supportAnchor.y * 0.08
-          const focusZ = faceAnchor.z * 0.86 + supportAnchor.z * 0.14
-          const headToTorso = Math.max(0.28, Math.abs(faceAnchor.y - torsoAnchor.y))
-          const portraitHeight = Math.max(headToTorso * 1.82, size.y * 0.58)
-          const softenedArmSpan = Math.max(0.38, Math.min(size.x * 0.34, portraitHeight * 0.62))
-          const distance = clamp(Math.max(portraitHeight * 0.68, softenedArmSpan) + size.z * 0.1, 0.76, 1.12)
+          // outstretched arms. Frame by a virtual portrait rectangle from slightly above head
+          // down to chest/upper torso, then compute camera distance from FOV so the head cannot
+          // be clipped off while thighs/feet remain below the viewport.
+          const focusX = faceAnchor.x * 0.88 + supportAnchor.x * 0.12
+          const focusZ = faceAnchor.z * 0.82 + supportAnchor.z * 0.18
+          const headToTorso = Math.max(0.26, Math.abs(faceAnchor.y - torsoAnchor.y))
+          const portraitTop = Math.min(box.max.y, faceAnchor.y + headToTorso * 0.34)
+          const portraitBottom = Math.max(box.min.y + size.y * 0.42, torsoAnchor.y - headToTorso * 0.34)
+          const portraitSpan = Math.max(0.48, portraitTop - portraitBottom)
+          const focusY = (portraitTop + portraitBottom) * 0.5
+          const distance = fitDistanceForVerticalSpan(portraitSpan, 0.70, 1.12, 2.75)
           previewLookAt.set(focusX, focusY, focusZ)
-          camera.position.set(focusX, focusY + Math.max(0.006, portraitHeight * 0.01), focusZ + distance)
+          camera.position.set(focusX, focusY + Math.max(0.004, portraitSpan * 0.015), focusZ + distance)
         } else {
-          // Last-resort portrait crop for unclassified uploaded models: target the upper 60% of
-          // the bounds so the preview behaves like a head-and-torso card instead of a full-body fit.
-          const focusY = box.min.y + size.y * 0.92
-          const distance = clamp(Math.max(size.y * 0.34, size.x * 0.46) + size.z * 0.16, 0.9, 1.45)
+          // Last-resort portrait crop for unclassified uploaded models: make a virtual portrait
+          // rectangle from the top of the model to roughly the waist/chest area. The previous
+          // target-at-92%-height + close-distance approach could cut off the head and leave only
+          // skirt/thighs visible on Sketchfab characters.
+          const portraitTop = box.max.y
+          const portraitBottom = box.min.y + size.y * 0.48
+          const portraitSpan = Math.max(0.5, portraitTop - portraitBottom)
+          const focusY = (portraitTop + portraitBottom) * 0.5
+          const distance = fitDistanceForVerticalSpan(portraitSpan, 0.68, 1.15, 3.0)
           previewLookAt.set(center.x, focusY, center.z)
-          camera.position.set(center.x, focusY + size.y * 0.008, center.z + distance)
+          camera.position.set(center.x, focusY + size.y * 0.006, center.z + distance)
         }
       }
     } else {
