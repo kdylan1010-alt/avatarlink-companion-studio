@@ -345,14 +345,19 @@ async function callGemini({ model, systemPrompt, userPrompt }) {
 }
 
 const server = http.createServer(async (req, res) => {
+  const requestUrl = new URL(req.url || '/', 'http://127.0.0.1')
+  const routePath = requestUrl.pathname.replace(/^\/avatarlink-companion-studio(?=\/api\/)/, '')
   if (req.method === 'OPTIONS') return jsonResponse(res, 204, {})
-  if (req.url === '/api/gemini/health') {
+  if (routePath === '/api/gemini/health') {
     return jsonResponse(res, 200, { ok: true, provider: 'gemini', hasKey: Boolean(process.env.GEMINI_API_KEY), keyExposed: false })
   }
-  if (req.url === '/api/github-models/health') {
+  if (routePath === '/api/github-models/health') {
     return jsonResponse(res, 200, { ok: true, provider: 'github-models', hasKey: Boolean(process.env.GITHUB_TOKEN), keyExposed: false, model: process.env.GITHUB_MODELS_MODEL || 'openai/gpt-4.1-mini' })
   }
-  if (req.url === '/api/github-models/generate' && req.method === 'POST') {
+  if (routePath === '/api/github-models/generate' && req.method !== 'POST') {
+    return jsonResponse(res, 405, { ok: false, code: 'GITHUB_MODELS_METHOD_NOT_ALLOWED', message: 'Use POST /api/github-models/generate with a JSON body. On a static host, set VITE_GITHUB_MODELS_PROXY_BASE or pass githubModelsProxyBase in the URL query so the browser posts to the running safe proxy, not GitHub Pages.' })
+  }
+  if (routePath === '/api/github-models/generate' && req.method === 'POST') {
     try {
       const payload = await readJson(req)
       const result = await callGithubModels(payload)
@@ -378,7 +383,7 @@ const server = http.createServer(async (req, res) => {
       return jsonResponse(res, 500, { ok: false, code: 'GITHUB_MODELS_PROXY_ERROR', message: redactSecretText(error.message) })
     }
   }
-  if (req.url === '/api/gemini/generate' && req.method === 'POST') {
+  if (routePath === '/api/gemini/generate' && req.method === 'POST') {
     try {
       const payload = await readJson(req)
       const result = await callGemini(payload)
@@ -404,7 +409,7 @@ const server = http.createServer(async (req, res) => {
       return jsonResponse(res, 500, { ok: false, code: 'PROXY_ERROR', message: error.message })
     }
   }
-  if (req.url === '/api/tts/health') {
+  if (routePath === '/api/tts/health') {
     return jsonResponse(res, 200, {
       ok: true,
       providerKeys: {
@@ -415,7 +420,7 @@ const server = http.createServer(async (req, res) => {
       browserVoiceIsFallbackOnly: true,
     })
   }
-  if (req.url === '/api/tts/elevenlabs' && req.method === 'POST') {
+  if (routePath === '/api/tts/elevenlabs' && req.method === 'POST') {
     const payload = await readJson(req)
     let lastError = null
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -432,7 +437,7 @@ const server = http.createServer(async (req, res) => {
     }
     return jsonResponse(res, 500, { ok: false, provider: 'elevenlabs', code: 'ELEVENLABS_PROXY_ERROR', message: redactSecretText(lastError?.message || 'fetch failed after retry'), endpoint: '/api/tts/elevenlabs', retryAttempt: 2 })
   }
-  if (req.url === '/api/tts/openai' && req.method === 'POST') {
+  if (routePath === '/api/tts/openai' && req.method === 'POST') {
     try {
       const payload = await readJson(req)
       const result = await callOpenAITts(payload)
@@ -441,7 +446,7 @@ const server = http.createServer(async (req, res) => {
       return jsonResponse(res, 500, { ok: false, provider: 'openai', code: 'OPENAI_TTS_PROXY_ERROR', message: redactSecretText(error.message), endpoint: '/api/tts/openai' })
     }
   }
-  if (req.url === '/api/tts/cartesia' && req.method === 'POST') {
+  if (routePath === '/api/tts/cartesia' && req.method === 'POST') {
     try {
       const payload = await readJson(req)
       const result = await callCartesiaTts(payload)

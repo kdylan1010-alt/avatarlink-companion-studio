@@ -36,7 +36,7 @@ const PROVIDER_PRESETS = {
   githubModels: {
     id: 'githubModels',
     label: 'GitHub Models via local safe proxy',
-    apiBase: '/api/github-models',
+    apiBase: 'http://127.0.0.1:8787/api/github-models',
     model: 'openai/gpt-4.1-mini',
     transport: 'local-github-models-proxy',
     authNote: 'Recommended live demo path. Uses GITHUB_TOKEN only in .env.local through the local/server proxy; the browser never receives the token.',
@@ -91,7 +91,31 @@ const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge
 const starterContract = buildProviderTtsContract({})
 const starterResponseMap = buildProviderResponseMap(starterContract)
 
-const TTS_PROXY_BASE = import.meta.env.VITE_TTS_PROXY_BASE || '/api/tts'
+
+function readStoredProxyBase(storageKey) {
+  if (typeof window === 'undefined') return ''
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const queryValue = params.get(storageKey)
+    if (queryValue) {
+      window.localStorage.setItem(storageKey, queryValue)
+      return queryValue
+    }
+    return window.localStorage.getItem(storageKey) || ''
+  } catch {
+    return ''
+  }
+}
+
+function resolveGithubModelsProxyBase() {
+  const envBase = import.meta.env.VITE_GITHUB_MODELS_PROXY_BASE
+  if (envBase) return envBase
+  const storedBase = readStoredProxyBase('githubModelsProxyBase')
+  if (storedBase) return storedBase
+  return PROVIDER_PRESETS.githubModels.apiBase
+}
+
+const TTS_PROXY_BASE = import.meta.env.VITE_TTS_PROXY_BASE || 'http://127.0.0.1:8787/api/tts'
 const API_VOICE_PROVIDERS = new Set(['elevenlabs', 'openai', 'cartesia'])
 const VOWEL_TO_VISEME = {
   a: 'aa',
@@ -177,7 +201,7 @@ const PROVIDER_ENV_DEFAULTS = {
     model: import.meta.env.VITE_OPENROUTER_MODEL || PROVIDER_PRESETS.openrouter.model,
   },
   githubModels: {
-    apiBase: import.meta.env.VITE_GITHUB_MODELS_PROXY_BASE || PROVIDER_PRESETS.githubModels.apiBase,
+    apiBase: resolveGithubModelsProxyBase(),
     apiKey: '',
     model: import.meta.env.VITE_GITHUB_MODELS_MODEL || PROVIDER_PRESETS.githubModels.model,
   },
