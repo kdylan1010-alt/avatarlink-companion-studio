@@ -15,6 +15,7 @@ const repoSubpath = '/avatarlink-companion-studio'
 const host = '127.0.0.1'
 const requestedPort = 0
 const modelPath = '/avatars/valid-white-f1-casual.glb'
+const prompt = 'Reply with one short sentence proving GPT motion is live.'
 
 fs.mkdirSync(artifactsDir, { recursive: true })
 
@@ -79,8 +80,8 @@ const server = http.createServer((req, res) => {
 
 ;(async () => {
   const startedAt = new Date().toISOString()
-  const screenshotPath = path.join(artifactsDir, 'uploaded-sketchfab-framing-proof.png')
-  const jsonPath = path.join(artifactsDir, 'uploaded-sketchfab-framing-proof.json')
+  const screenshotPath = path.join(artifactsDir, 'uploaded-sketchfab-consolidated-proof.png')
+  const jsonPath = path.join(artifactsDir, 'uploaded-sketchfab-consolidated-proof.json')
   await new Promise((resolve) => server.listen(requestedPort, host, resolve))
   port = server.address().port
   const browser = await chromium.launch({ headless: true, channel: 'chrome' })
@@ -94,7 +95,7 @@ const server = http.createServer((req, res) => {
     await page.goto(appUrl, { waitUntil: 'networkidle', timeout: 45000 })
     await page.waitForFunction(() => Boolean(window.__avatarlinkRuntime?.loadFile && window.__avatarlinkRuntime?.getCameraFramingSnapshot), null, { timeout: 30000 })
 
-    const result = await page.evaluate(async ({ modelPath }) => {
+    const result = await page.evaluate(async ({ modelPath, prompt }) => {
       const runtime = window.__avatarlinkRuntime
       const absoluteModelUrl = `${location.origin}${modelPath}`
       const response = await fetch(absoluteModelUrl)
@@ -102,15 +103,55 @@ const server = http.createServer((req, res) => {
       const blob = await response.blob()
       const file = new File([blob], modelPath.split('/').pop(), { type: 'model/gltf-binary' })
       const loadResult = await runtime.loadFile(file)
-      await new Promise((resolve) => setTimeout(resolve, 400))
+      await new Promise((resolve) => setTimeout(resolve, 450))
+
       const framing = runtime.getCameraFramingSnapshot()
+      const stabilityBefore = runtime.getAvatarStabilityFrame?.()
+      const bodyPartBefore = runtime.getBodyPartMotionSnapshot?.()
+
+      const generateRes = await fetch('http://127.0.0.1:8787/api/github-models/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai/gpt-4.1-mini',
+          systemPrompt: 'You are brief. Reply naturally in one short sentence only.',
+          userPrompt: prompt,
+        }),
+      })
+      const generateJson = await generateRes.json()
+      if (!generateRes.ok || !generateJson?.ok) {
+        throw new Error(`Generate failed: ${generateRes.status} ${JSON.stringify(generateJson)}`)
+      }
+
+      const motionSummary = runtime.applyMotionPlan?.(generateJson.motionPlan, generateJson.text)
+      const bodyProofStarted = runtime.runBodyPartMotionProof?.({ durationMs: 2600, cycleHz: 0.9 })
+      await new Promise((resolve) => setTimeout(resolve, (bodyProofStarted?.durationMs || 2600) + 420))
+
+      const proceduralAfter = runtime.getProceduralBodyMotionSnapshot?.()
+      const bodyPartAfter = runtime.getBodyPartMotionSnapshot?.()
+      const stabilityAfter = runtime.getAvatarStabilityFrame?.()
+
       return {
         modelPath,
         loadResult,
         framing,
+        stabilityBefore,
+        stabilityAfter,
+        bodyPartBefore,
+        bodyPartAfter,
+        proceduralAfter,
+        generate: {
+          status: generateRes.status,
+          ok: Boolean(generateJson?.ok),
+          text: generateJson?.text,
+          model: generateJson?.model,
+          motionPlan: generateJson?.motionPlan,
+        },
+        motionSummary,
+        bodyProofStarted,
         bodyText: document.body.innerText,
       }
-    }, { modelPath })
+    }, { modelPath, prompt })
 
     await page.screenshot({ path: screenshotPath, fullPage: true })
 
@@ -120,16 +161,17 @@ const server = http.createServer((req, res) => {
     const projectedTopY = Number(result.framing?.projected?.top?.[1] ?? Number.NaN)
     const projectedCenterY = Number(result.framing?.projected?.center?.[1] ?? Number.NaN)
     const projectedBottomY = Number(result.framing?.projected?.bottom?.[1] ?? Number.NaN)
-
     const boxMinY = Number(result.framing?.boxMin?.[1] ?? Number.NaN)
-    const boxMaxY = Number(result.framing?.boxMax?.[1] ?? Number.NaN)
     const upperBodyLookAtMin = Number.isFinite(boxMinY) && Number.isFinite(sizeY)
       ? boxMinY + sizeY * 0.78
       : Number.NaN
+    const generatedText = String(result.generate?.text || '')
+    const peakDegrees = result.bodyPartAfter?.peakDegrees || {}
+    const animatedPartCount = Number(result.bodyPartAfter?.animatedPartCount || 0)
+    const stabilityGuard = result.stabilityAfter?.rootMotionGuard || result.bodyPartAfter?.rootMotionGuard || 'missing'
 
     const checks = {
       uploadLoaded: /loaded|rendered|glb|gltf/i.test(JSON.stringify(result.loadResult || {})),
-      // Portrait framing must bias toward a head/eyes/chest crop, not a roomy full-body fallback.
       portraitDistance: Number.isFinite(cameraZ) && cameraZ >= 0.9 && cameraZ <= 1.55,
       upperBodyTarget: Number.isFinite(lookAtY) && Number.isFinite(upperBodyLookAtMin) && lookAtY >= upperBodyLookAtMin,
       projectedOrder: [projectedTopY, projectedCenterY, projectedBottomY].every(Number.isFinite)
@@ -139,7 +181,14 @@ const server = http.createServer((req, res) => {
       upperBodyFocus: Number.isFinite(projectedTopY) && Number.isFinite(projectedCenterY)
         && (projectedTopY - projectedCenterY) >= 1.75,
       lowerBodyCropped: Number.isFinite(projectedBottomY) && projectedBottomY < -1.05,
-      validHeight: Number.isFinite(sizeY) && sizeY > 1.0,
+      gptGenerateOk: result.generate?.status === 200 && Boolean(result.generate?.ok),
+      noArchivistEchoFallback: !/archivist echo|\bi heard\b/i.test(generatedText),
+      motionCuePresent: Number(result.motionSummary?.cueCount || 0) >= 1,
+      bodyProofRan: animatedPartCount >= 8,
+      headMotionPeak: Number(peakDegrees?.head?.x || 0) >= 1 || Number(peakDegrees?.head?.y || 0) >= 1 || Number(peakDegrees?.head?.z || 0) >= 1,
+      handMotionPeak: Number(peakDegrees?.leftHand?.x || 0) >= 1 || Number(peakDegrees?.rightHand?.x || 0) >= 1 || Number(peakDegrees?.leftHand?.z || 0) >= 1 || Number(peakDegrees?.rightHand?.z || 0) >= 1,
+      torsoMotionPeak: Number(peakDegrees?.torso?.x || 0) >= 1 || Number(peakDegrees?.torso?.y || 0) >= 1 || Number(peakDegrees?.torso?.z || 0) >= 1,
+      rootTransformStaysFixed: stabilityGuard === 'root-transform-stays-fixed',
     }
     const passed = Object.values(checks).every(Boolean)
 
@@ -157,11 +206,10 @@ const server = http.createServer((req, res) => {
         projectedTopY,
         projectedCenterY,
         projectedBottomY,
-        boxMinY,
-        boxMaxY,
         upperBodyLookAtMin,
+        animatedPartCount,
       },
-      consoleTail: consoleLines.slice(-40),
+      consoleTail: consoleLines.slice(-60),
       ...result,
     }
 

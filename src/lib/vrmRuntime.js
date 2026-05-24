@@ -1236,19 +1236,18 @@ export async function createVrmPreview(canvas) {
           const supportAnchor = worldOf(genericNeck || genericChest || genericHips)
           const torsoAnchor = worldOf(genericChest || genericHips || genericNeck)
           // Generic Sketchfab rigs frequently arrive in a T-pose, so full width is dominated by
-          // outstretched arms. Frame by a virtual portrait rectangle from slightly above head
-          // down to chest/upper torso, then compute camera distance from FOV so the head cannot
-          // be clipped off while thighs/feet remain below the viewport.
-          const focusX = faceAnchor.x * 0.88 + supportAnchor.x * 0.12
-          const focusZ = faceAnchor.z * 0.82 + supportAnchor.z * 0.18
-          const headToTorso = Math.max(0.26, Math.abs(faceAnchor.y - torsoAnchor.y))
-          const portraitTop = Math.min(box.max.y, faceAnchor.y + headToTorso * 0.34)
-          const portraitBottom = Math.max(box.min.y + size.y * 0.42, torsoAnchor.y - headToTorso * 0.34)
-          const portraitSpan = Math.max(0.48, portraitTop - portraitBottom)
-          const focusY = (portraitTop + portraitBottom) * 0.5
-          const distance = fitDistanceForVerticalSpan(portraitSpan, 0.70, 1.12, 2.75)
+          // outstretched arms. Bias the portrait crop toward face/eyes/chest instead of the full
+          // body box so the camera lands on a head+upper-torso composition rather than thighs.
+          const focusX = faceAnchor.x * 0.92 + supportAnchor.x * 0.08
+          const focusZ = faceAnchor.z * 0.88 + supportAnchor.z * 0.12
+          const headToTorso = Math.max(0.24, Math.abs(faceAnchor.y - torsoAnchor.y))
+          const portraitTop = Math.min(box.max.y, faceAnchor.y + headToTorso * 0.18)
+          const portraitBottom = Math.max(box.min.y + size.y * 0.52, torsoAnchor.y - headToTorso * 0.14)
+          const portraitSpan = Math.max(0.34, portraitTop - portraitBottom)
+          const focusY = faceAnchor.y * 0.7 + torsoAnchor.y * 0.3
+          const distance = fitDistanceForVerticalSpan(portraitSpan, 0.86, 0.92, 1.45)
           previewLookAt.set(focusX, focusY, focusZ)
-          camera.position.set(focusX, focusY + Math.max(0.004, portraitSpan * 0.015), focusZ + distance)
+          camera.position.set(focusX, focusY + Math.max(0.004, portraitSpan * 0.012), focusZ + distance)
         } else {
           // Last-resort portrait crop for unclassified uploaded models: make a virtual portrait
           // rectangle from the top of the model to roughly the waist/chest area. The previous

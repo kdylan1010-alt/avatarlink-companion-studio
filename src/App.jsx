@@ -76,7 +76,7 @@ const PROVIDER_PRESETS = {
 }
 
 const starterPersona = {
-  name: 'Archivist Echo',
+  name: 'Companion Guide',
   tone: 'Warm, curious, and lightly theatrical',
   boundaries: 'No harassment, no explicit sexual roleplay, no impersonation of real people',
   opener: 'Welcome back. Want to tune your avatar, test a scene, or rehearse a conversation?',
@@ -248,7 +248,8 @@ function buildProviderSelectedStatus(providerId, label, hasLocalKey) {
 }
 
 function buildDemoReply(persona, userPrompt) {
-  return `${persona.name}: I heard “${userPrompt}.” Let's turn that into a flirty companion moment: greet the fan warmly, tease one premium perk, and invite them into a private follow-up scene.`
+  const prompt = userPrompt?.trim() || 'your scene idea'
+  return `${persona.name}: Thanks — I can turn “${prompt}” into a warm companion reply, a premium teaser, and a clear follow-up invitation.`
 }
 
 function buildSpeechFrames(text) {
