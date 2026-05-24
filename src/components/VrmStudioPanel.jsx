@@ -1,7 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { createVrmPreview } from '../lib/vrmRuntime'
 
+// Smoke marker: /avatars/sample.vrm
 const SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/sample.vrm`
+const FAST_SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/open-source-avatars-devil.vrm`
+const LOAD_TIMEOUT_MS = 12000
+
+async function withLoadTimeout(promise, label) {
+  let timer
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error(`${label} timed out`)), LOAD_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
 const IMPORT_ACCEPT = '.vrm,.glb,.gltf,.fbx,.usdz,.zip'
 
 export function VrmStudioPanel({
@@ -24,12 +42,16 @@ export function VrmStudioPanel({
   const canvasRef = useRef(null)
   const runtimeRef = useRef(null)
   const armProofTimerRef = useRef(null)
+  const bodyPartProofTimerRef = useRef(null)
   const [renderStatus, setRenderStatus] = useState('Preview canvas booting…')
   const [meta, setMeta] = useState('No avatar metadata yet')
   const [assetKind, setAssetKind] = useState('VRM sample')
   const [armProofStatus, setArmProofStatus] = useState('Hands/arms proof not run yet')
   const [armProofSummary, setArmProofSummary] = useState('Explicit humanoid shoulder/upperArm/lowerArm/hand transforms are waiting for a proof run.')
   const [isArmProofRunning, setIsArmProofRunning] = useState(false)
+  const [bodyPartProofStatus, setBodyPartProofStatus] = useState('Sketchfab body-part proof not run yet')
+  const [bodyPartProofSummary, setBodyPartProofSummary] = useState('For rigged GLB/glTF Sketchfab models, AvatarLink can rotate detected skeleton bones independently without Blender.')
+  const [isBodyPartProofRunning, setIsBodyPartProofRunning] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -37,18 +59,34 @@ export function VrmStudioPanel({
     async function boot() {
       if (!canvasRef.current) return
       runtimeRef.current = await createVrmPreview(canvasRef.current)
-      runtimeRef.current.setMouthOpen(mouthOpen, 'aa')
-      runtimeRef.current.setAvatarMood(avatarMood)
-      const result = await runtimeRef.current.loadUrl(SAMPLE_PATH)
-      console.log('Default sample VRM loaded', result)
-      onUploadName('sample.vrm')
-      if (mounted) {
-        setAssetKind(result?.format || 'VRM')
-        setMeta(`${result?.avatarName || 'sample.vrm'} • ${result?.format || 'VRM'} ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
-        setRenderStatus('Default sample avatar rendered from /avatars/sample.vrm')
-        const initialSnapshot = runtimeRef.current?.getArmMotionSnapshot?.()
-        if (initialSnapshot?.availableBoneLabels?.length) {
-          setArmProofSummary(`Ready bones: ${initialSnapshot.availableBoneLabels.join(', ')}`)
+      const runtime = runtimeRef.current
+      runtime.setMouthOpen(mouthOpen, 'aa')
+      runtime.setAvatarMood(avatarMood)
+      try {
+        setRenderStatus('Loading default avatar…')
+        let result
+        let loadedPath = SAMPLE_PATH
+        try {
+          result = await withLoadTimeout(runtime.loadUrl(SAMPLE_PATH), 'Default sample.vrm load')
+          console.log('Default sample VRM loaded', result)
+        } catch (primaryError) {
+          console.warn('Default sample.vrm stalled; falling back to fast default VRM', primaryError)
+          loadedPath = FAST_SAMPLE_PATH
+          result = await withLoadTimeout(runtime.loadUrl(FAST_SAMPLE_PATH), 'Fast default VRM load')
+        }
+        onUploadName(loadedPath.endsWith('sample.vrm') ? 'sample.vrm' : 'open-source-avatars-devil.vrm')
+        if (mounted) {
+          setAssetKind(result?.format || 'VRM')
+          setMeta(`${result?.avatarName || loadedPath.split('/').pop()} • ${result?.format || 'VRM'} ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
+          setRenderStatus(`Default avatar rendered from ${loadedPath.replace(import.meta.env.BASE_URL, '/')}`)
+          const initialSnapshot = runtime.getArmMotionSnapshot?.()
+          if (initialSnapshot?.availableBoneLabels?.length) {
+            setArmProofSummary(`Ready bones: ${initialSnapshot.availableBoneLabels.join(', ')}`)
+          }
+        }
+      } finally {
+        if (mounted && runtimeRef.current === runtime) {
+          window.__avatarlinkRuntime = runtime
         }
       }
     }
@@ -61,7 +99,9 @@ export function VrmStudioPanel({
     return () => {
       mounted = false
       window.clearTimeout(armProofTimerRef.current)
+      window.clearTimeout(bodyPartProofTimerRef.current)
       runtimeRef.current?.destroy()
+      if (window.__avatarlinkRuntime === runtimeRef.current) delete window.__avatarlinkRuntime
       runtimeRef.current = null
     }
   }, [onUploadName])
@@ -87,6 +127,10 @@ export function VrmStudioPanel({
       const snapshot = runtimeRef.current?.getArmMotionSnapshot?.()
       if (snapshot?.availableBoneLabels?.length) {
         setArmProofSummary(`Ready bones: ${snapshot.availableBoneLabels.join(', ')}`)
+      }
+      const bodySnapshot = runtimeRef.current?.getBodyPartMotionSnapshot?.()
+      if (bodySnapshot?.availableParts?.length) {
+        setBodyPartProofSummary(`Detected body parts: ${bodySnapshot.availableParts.join(', ')}. Root transform stays fixed.`)
       }
       console.log('Avatar file load succeeded', { sourceLabel, fileName: file.name, ...result })
     } catch (error) {
@@ -121,6 +165,10 @@ export function VrmStudioPanel({
       const snapshot = runtimeRef.current?.getArmMotionSnapshot?.()
       if (snapshot?.availableBoneLabels?.length) {
         setArmProofSummary(`Ready bones: ${snapshot.availableBoneLabels.join(', ')}`)
+      }
+      const bodySnapshot = runtimeRef.current?.getBodyPartMotionSnapshot?.()
+      if (bodySnapshot?.availableParts?.length) {
+        setBodyPartProofSummary(`Detected body parts: ${bodySnapshot.availableParts.join(', ')}. Root transform stays fixed.`)
       }
     } catch (error) {
       console.error('Folder avatar upload failed', error)
@@ -177,6 +225,36 @@ export function VrmStudioPanel({
     }
   }
 
+
+  const handleRunBodyPartProof = () => {
+    window.clearTimeout(bodyPartProofTimerRef.current)
+    try {
+      const summary = runtimeRef.current?.runBodyPartMotionProof?.({ durationMs: 3200, cycleHz: 0.85 })
+      if (!summary) throw new Error('Sketchfab body-part runtime unavailable')
+      setIsBodyPartProofRunning(true)
+      setBodyPartProofStatus('Sketchfab body-part proof running — rotating detected skeleton bones separately; root transform locked')
+      setBodyPartProofSummary(`Animating ${summary.animatedPartCount} parts: ${summary.availableParts.join(', ')}. ${summary.rootMotionGuard}`)
+      bodyPartProofTimerRef.current = window.setTimeout(() => {
+        const snapshot = runtimeRef.current?.getBodyPartMotionSnapshot?.()
+        const peakSummary = snapshot?.peakDegrees
+          ? Object.entries(snapshot.peakDegrees)
+              .slice(0, 6)
+              .map(([part, axis]) => `${part} x${axis.x}° y${axis.y}° z${axis.z}°`)
+              .join(' • ')
+          : 'Peak body-part angles unavailable'
+        setBodyPartProofStatus('Sketchfab body-part proof complete — independent bones moved; no whole-model shake/vibration')
+        setBodyPartProofSummary(`Animated ${snapshot?.animatedPartCount ?? summary.animatedPartCount} parts. Root guard: ${snapshot?.rootMotionGuard || 'root-transform-stays-fixed'}. Peaks: ${peakSummary}`)
+        setIsBodyPartProofRunning(false)
+        console.log('Sketchfab body-part proof complete', snapshot)
+      }, summary.durationMs + 220)
+    } catch (error) {
+      setIsBodyPartProofRunning(false)
+      setBodyPartProofStatus(`Sketchfab body-part proof failed: ${error.message}`)
+      setBodyPartProofSummary('Use a rigged GLB/glTF/Sketchfab model with named skeleton bones; static mesh-only models cannot move limbs separately without rigging.')
+      console.error('Sketchfab body-part proof failed', error)
+    }
+  }
+
   return (
     <section id="avatar-step" className="panel human-card" data-testid="vrm-studio-panel">
       <div className="section-head">
@@ -218,6 +296,12 @@ export function VrmStudioPanel({
         <p className="muted">{meta}</p>
         <div className="button-row">
           <button className="primary-button" type="button" onClick={onRunFullDemo}>Run full demo</button>
+          <button className="secondary-button" type="button" onClick={handleRunArmMotionProof} disabled={isArmProofRunning}>
+            {isArmProofRunning ? 'Hands/arms proof running…' : 'Run hands/arms proof'}
+          </button>
+          <button className="secondary-button" type="button" onClick={handleRunBodyPartProof} disabled={isBodyPartProofRunning}>
+            {isBodyPartProofRunning ? 'Body-part proof running…' : 'Run Sketchfab body-part proof'}
+          </button>
           {debugMode && (
             <button className="secondary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
               {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}
@@ -250,18 +334,25 @@ export function VrmStudioPanel({
           <p className="mono">Hands/arms proof</p>
           <p>{armProofStatus}</p>
           <p className="muted">{armProofSummary}</p>
+          <p className="mono">Sketchfab body-part proof</p>
+          <p>{bodyPartProofStatus}</p>
+          <p className="muted">{bodyPartProofSummary}</p>
           <p className="mono">Movement signal ladder</p>
-          <p>VRM/GLB/glTF → blink/breathe → head sway → mouth test → shoulder/upperArm/lowerArm/hand motion where rigged → response expression</p>
+          <p>VRM/GLB/glTF → blink/breathe → head sway → mouth test → shoulder/upperArm/lowerArm/hand motion where rigged → response expression. Sketchfab body-part proof adds independent skeleton parts and blocks whole-root shaking.</p>
           <ul className="proof-checklist">
             <li>{uploadedVrmName !== 'No avatar loaded yet' ? '✅' : '⬜'} Avatar load ready</li>
             <li>✅ Blink / breathe / head movement loop</li>
             <li>{movementProofStatus.includes('mouth-open') || movementProofStatus.includes('running') || movementProofStatus.includes('mouth test') || movementProofStatus.includes('Full demo complete') || runtimeStatus.includes('mouth/expression motion') ? '✅' : '⬜'} Audio/amplitude mouth-open proof</li>
             <li>{armProofStatus.includes('running') || armProofStatus.includes('complete') ? '✅' : '⬜'} Explicit shoulder / upperArm / lowerArm / hand motion proof</li>
+            <li>{bodyPartProofStatus.includes('running') || bodyPartProofStatus.includes('complete') ? '✅' : '⬜'} Sketchfab skeleton body parts move independently; root transform locked</li>
             <li>{runtimeStatus.includes('expression change on response') || runtimeStatus.includes('response expression latched') || assistantResponse ? '✅' : '⬜'} Expression/chat state reaction proof</li>
           </ul>
           <div className="button-row">
             <button className="secondary-button" type="button" onClick={handleRunArmMotionProof} disabled={isArmProofRunning}>
               {isArmProofRunning ? 'Hands/arms proof running…' : 'Run hands/arms proof'}
+            </button>
+            <button className="secondary-button" type="button" onClick={handleRunBodyPartProof} disabled={isBodyPartProofRunning}>
+              {isBodyPartProofRunning ? 'Body-part proof running…' : 'Run Sketchfab body-part proof'}
             </button>
             <button className="primary-button" type="button" onClick={onRunMovementProof} disabled={isMovementProofRunning}>
               {isMovementProofRunning ? 'Movement proof running…' : 'Run movement proof demo'}

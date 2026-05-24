@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "qa:smoke": "node scripts/qa-smoke.mjs",
+    "qa:uploaded-framing": "vite build && node scripts/uploaded-framing-proof.mjs",
     "gemini:proxy": "node scripts/gemini-proxy.mjs",
     "github-models:proxy": "node scripts/gemini-proxy.mjs",
     "proof:browser": "vite build && node scripts/browser-proof.mjs"

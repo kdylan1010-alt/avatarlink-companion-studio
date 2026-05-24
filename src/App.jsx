@@ -36,7 +36,7 @@ const PROVIDER_PRESETS = {
   githubModels: {
     id: 'githubModels',
     label: 'GitHub Models via local safe proxy',
-    apiBase: 'http://127.0.0.1:8787/api/github-models',
+    apiBase: '/api/github-models',
     model: 'openai/gpt-4.1-mini',
     transport: 'local-github-models-proxy',
     authNote: 'Recommended live demo path. Uses GITHUB_TOKEN only in .env.local through the local/server proxy; the browser never receives the token.',
@@ -91,7 +91,7 @@ const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge
 const starterContract = buildProviderTtsContract({})
 const starterResponseMap = buildProviderResponseMap(starterContract)
 
-const TTS_PROXY_BASE = import.meta.env.VITE_TTS_PROXY_BASE || 'http://127.0.0.1:8787/api/tts'
+const TTS_PROXY_BASE = import.meta.env.VITE_TTS_PROXY_BASE || '/api/tts'
 const API_VOICE_PROVIDERS = new Set(['elevenlabs', 'openai', 'cartesia'])
 const VOWEL_TO_VISEME = {
   a: 'aa',
@@ -106,6 +106,26 @@ function pickViseme(token = '', index = 0) {
   const vowel = [...lower].find((char) => VOWEL_TO_VISEME[char])
   if (vowel) return VOWEL_TO_VISEME[vowel]
   return ['aa', 'ih', 'ou', 'ee', 'oh'][index % 5]
+}
+
+async function unlockAudioOutput() {
+  try {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext
+    if (AudioContextCtor) {
+      const context = new AudioContextCtor()
+      if (context.state === 'suspended') await context.resume()
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      gain.gain.value = 0.0001
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start()
+      oscillator.stop(context.currentTime + 0.03)
+      window.setTimeout(() => context.close?.(), 250)
+    }
+  } catch (error) {
+    console.info('Audio unlock probe skipped', error?.message || error)
+  }
 }
 
 function base64ToBlob(base64, mimeType = 'audio/mpeg') {
@@ -124,7 +144,7 @@ async function fetchApiTtsAudio({ provider, text, voiceId }) {
     response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text.length > 180 ? `${text.slice(0, 177)}…` : text, voiceId: voiceId === 'browser-default' ? undefined : voiceId }),
+      body: JSON.stringify({ text: text.length > 32 ? `${text.slice(0, 29)}…` : text, voiceId: voiceId === 'browser-default' ? undefined : voiceId }),
       signal: controller.signal,
     })
   } finally {
@@ -247,13 +267,14 @@ async function requestCompanionResponse({
       const response = await fetch(`${apiBase.replace(/\/$/, '')}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, systemPrompt: systemPromptPreview, userPrompt }),
+        body: JSON.stringify({ model, systemPrompt: systemPromptPreview, userPrompt, responseFormat: 'avatar_motion_plan_v1' }),
       })
       const data = await response.json().catch(() => ({}))
       const blocked = data?.providerBlocked || data?.geminiBlocked
       if (response.ok && data?.text && !data?.fallbackProvider && !blocked) {
         return {
           text: data.text.trim(),
+          motionPlan: data.motionPlan || null,
           label: `live-${modelProvider}:${data.model || model}`,
           status: `Live ${proxyLabel} response received through safe local proxy (${data.model || model})`,
           live: true,
@@ -263,6 +284,7 @@ async function requestCompanionResponse({
       const reason = blocked?.message || data?.message || data?.error || `${proxyLabel} proxy HTTP ${response.status}`
       return {
         text: fallbackText,
+        motionPlan: data?.motionPlan || null,
         label: `fallback-${modelProvider}:${data?.code || blocked?.code || response.status}`,
         status: `${proxyLabel} blocked (${reason}); full avatar chain continued with local fallback speech/movement`,
         live: false,
@@ -273,6 +295,7 @@ async function requestCompanionResponse({
         : 'The safe proxy is unreachable from this browser session.'
       return {
         text: buildDemoReply(persona, userPrompt),
+        motionPlan: null,
         label: `fallback-${modelProvider}:network-unreachable`,
         status: `${proxyLabel} safe proxy unavailable (${error.message}). ${publicTunnelHint} Continued with demo fallback so the full demo pipeline still completes.`,
         live: false,
@@ -406,6 +429,20 @@ export default function App() {
     setMouthViseme(frame.viseme || 'aa')
   }
 
+  const applyStructuredMotionPlan = (motionPlan, text) => {
+    if (!motionPlan) return null
+    try {
+      const summary = window.__avatarlinkRuntime?.applyMotionPlan?.(motionPlan, text)
+      if (summary?.cueCount) {
+        setMovementProofStatus(`GitHub GPT motion plan active — ${summary.cueCount} timed cues controlling body/head/arms/hands/hair while text is spoken`)
+      }
+      return summary
+    } catch (error) {
+      setMovementProofStatus(`Motion plan parse failed; procedural speech motion continued (${error.message})`)
+      return null
+    }
+  }
+
   const playApiAudioWithLipSync = async ({ blob, text }) => {
     const timeline = buildSpeechFrames(text)
     cancelPlaybackRef.current = playVisemeTimeline(timeline, (frame) => {
@@ -416,8 +453,8 @@ export default function App() {
     const objectUrl = URL.createObjectURL(blob)
     const audio = new Audio(objectUrl)
     audio.preload = 'auto'
-    audio.muted = true
-    audio.volume = 0
+    audio.muted = !!navigator.webdriver
+    audio.volume = navigator.webdriver ? 0 : 1
     const metadata = await new Promise((resolve) => {
       let settled = false
       const finish = (eventName) => {
@@ -457,6 +494,7 @@ export default function App() {
   const speakWithFallback = async (text, options = {}) => {
     cancelPlaybackRef.current?.()
     setAvatarMood('speaking')
+    applyStructuredMotionPlan(options.motionPlan, text)
     const timeline = buildSpeechFrames(text)
     cancelPlaybackRef.current = playVisemeTimeline(timeline, (frame) => {
       applyMouthFrame(frame)
@@ -640,6 +678,7 @@ export default function App() {
 
 
   const handleRunFullDemo = async () => {
+    await unlockAudioOutput()
     setIsRunning(true)
     cancelPlaybackRef.current?.()
     setAvatarMood('listening')
@@ -664,6 +703,7 @@ export default function App() {
       setAssistantResponse(responseText)
       setRuntimeProviderLabel(providerLabel)
       await speakWithFallback(responseText, {
+        motionPlan: providerResult.motionPlan,
         finalMovementProofStatus: 'Full demo complete — VRM + voice + provider/mock + chat + speech + mouth movement chain visible',
         finalRuntimeStatus: 'Full demo complete — user message produced a spoken response and drove avatar mouth/expression motion',
       })
@@ -698,7 +738,7 @@ export default function App() {
 
       setAssistantResponse(responseText)
       setRuntimeProviderLabel(providerLabel)
-      await speakWithFallback(responseText)
+      await speakWithFallback(responseText, { motionPlan: providerResult.motionPlan })
     } catch (error) {
       setRuntimeStatus(`Runtime call failed: ${error.message}`)
       setRuntimeProviderLabel(`${providerMeta.id}:live-call-failed`)

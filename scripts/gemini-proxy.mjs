@@ -32,7 +32,7 @@ function jsonResponse(res, status, payload) {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, bypass-tunnel-reminder',
   })
   res.end(JSON.stringify(payload))
 }
@@ -89,6 +89,26 @@ function classifyGeminiError(status, bodyText) {
 }
 
 
+
+function parseAvatarMotionPlanResponse(text) {
+  const raw = String(text || '').trim()
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim()
+  try {
+    const parsed = JSON.parse(stripped)
+    if (parsed && typeof parsed === 'object' && typeof parsed.spokenText === 'string') {
+      return {
+        text: parsed.spokenText.trim(),
+        motionPlan: {
+          format: 'avatar_motion_plan_v1',
+          spokenText: parsed.spokenText.trim(),
+          cues: Array.isArray(parsed.cues) ? parsed.cues.slice(0, 24) : [],
+        },
+      }
+    }
+  } catch {}
+  return { text: raw, motionPlan: null }
+}
+
 function classifyGithubModelsError(status, bodyText) {
   try {
     const parsed = JSON.parse(bodyText)
@@ -118,11 +138,12 @@ async function callGithubModels({ model, systemPrompt, userPrompt }) {
     body: JSON.stringify({
       model: selectedModel,
       messages: [
-        { role: 'system', content: systemPrompt || 'You are an AvatarLink companion.' },
+        { role: 'system', content: `${systemPrompt || 'You are an AvatarLink companion.'}
+You control an upper-body avatar. Return STRICT JSON only, no markdown. Schema: {"spokenText":"1-2 short sentences the avatar will say aloud","cues":[{"startMs":0,"durationMs":700,"text":"spoken words covered by this cue","mood":"speaking","body":{"body":1.0,"head":1.0,"arms":1.0,"hands":1.0,"hair":1.3,"eyes":1.0}}]}. Values 0-2.5. Cues must describe how every part moves while that exact text is being spoken.` },
         { role: 'user', content: userPrompt || 'Hello' },
       ],
-      temperature: 0.7,
-      max_tokens: 220,
+      temperature: 0.45,
+      max_tokens: 520,
     }),
   })
   const bodyText = await response.text()
@@ -130,8 +151,9 @@ async function callGithubModels({ model, systemPrompt, userPrompt }) {
     return { ok: false, status: response.status, ...classifyGithubModelsError(response.status, bodyText) }
   }
   const parsed = JSON.parse(bodyText)
-  const text = parsed?.choices?.[0]?.message?.content?.trim()
-  return { ok: true, text: text || 'GitHub Models returned an empty response.', model: selectedModel }
+  const rawText = parsed?.choices?.[0]?.message?.content?.trim()
+  const motionParsed = parseAvatarMotionPlanResponse(rawText || '')
+  return { ok: true, text: motionParsed.text || 'GitHub Models returned an empty response.', motionPlan: motionParsed.motionPlan, model: selectedModel }
 }
 
 
@@ -340,6 +362,7 @@ const server = http.createServer(async (req, res) => {
         return jsonResponse(res, 200, {
           ok: true,
           text: hermesFallback.text,
+          motionPlan: null,
           model: hermesFallback.model,
           fallbackProvider: 'hermes-openai-codex',
           providerBlocked: { provider: 'github-models', code: result.code, message: result.message },
@@ -365,6 +388,7 @@ const server = http.createServer(async (req, res) => {
         return jsonResponse(res, 200, {
           ok: true,
           text: hermesFallback.text,
+          motionPlan: null,
           model: hermesFallback.model,
           fallbackProvider: 'hermes-openai-codex',
           geminiBlocked: { code: result.code, message: result.message },
