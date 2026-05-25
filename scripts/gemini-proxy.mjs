@@ -61,7 +61,7 @@ async function callHermesFallback({ systemPrompt, userPrompt }) {
 }
 
 function fallbackReply(userPrompt) {
-  return `AvatarLink local fallback: I heard “${userPrompt || 'your message'}.” The live provider is configured through the safe proxy, but it is currently blocked or unavailable, so the avatar chain continues with local speech and movement.`
+  return `AvatarLink local fallback: Thanks — I can continue the avatar motion path for “${userPrompt || 'your message'},” but the live provider is currently blocked or unavailable.`
 }
 
 function redactSecretText(value) {
@@ -90,23 +90,62 @@ function classifyGeminiError(status, bodyText) {
 
 
 
+function buildFallbackMotionPlan(text) {
+  const spokenText = String(text || '').trim() || 'Hello.'
+  const segments = spokenText
+    .split(/(?<=[.!?])\s+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+  const sourceSegments = segments.length ? segments : [spokenText]
+  let startMs = 0
+  const cues = sourceSegments.map((segment, index) => {
+    const wordCount = segment.split(/\s+/).filter(Boolean).length || 1
+    const durationMs = Math.max(650, Math.min(1800, 420 + wordCount * 110))
+    const cue = {
+      startMs,
+      durationMs,
+      text: segment,
+      mood: index === sourceSegments.length - 1 ? 'speaking' : 'listening',
+      body: {
+        body: Number((0.82 + index * 0.06).toFixed(2)),
+        head: Number((1.05 + (index % 2) * 0.1).toFixed(2)),
+        arms: Number((0.72 + index * 0.08).toFixed(2)),
+        hands: Number((0.92 + index * 0.12).toFixed(2)),
+        hair: 1.2,
+        eyes: 1.0,
+      },
+    }
+    startMs += durationMs
+    return cue
+  })
+  return {
+    format: 'avatar_motion_plan_v1',
+    spokenText,
+    cues,
+  }
+}
+
 function parseAvatarMotionPlanResponse(text) {
   const raw = String(text || '').trim()
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim()
   try {
     const parsed = JSON.parse(stripped)
     if (parsed && typeof parsed === 'object' && typeof parsed.spokenText === 'string') {
+      const fallbackPlan = buildFallbackMotionPlan(parsed.spokenText)
+      const cues = Array.isArray(parsed.cues) && parsed.cues.length ? parsed.cues.slice(0, 24) : fallbackPlan.cues
       return {
         text: parsed.spokenText.trim(),
         motionPlan: {
           format: 'avatar_motion_plan_v1',
           spokenText: parsed.spokenText.trim(),
-          cues: Array.isArray(parsed.cues) ? parsed.cues.slice(0, 24) : [],
+          cues,
         },
       }
     }
   } catch {}
-  return { text: raw, motionPlan: null }
+  const fallbackPlan = buildFallbackMotionPlan(raw)
+  return { text: fallbackPlan.spokenText, motionPlan: fallbackPlan }
 }
 
 function classifyGithubModelsError(status, bodyText) {

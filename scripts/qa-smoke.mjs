@@ -38,6 +38,9 @@ const checks = [
   ['voice_modes_fallback_only', source.includes('browser-speech (fallback only — not final)') && source.includes('motion-only-fallback (no audio fallback)') && source.includes('browser/system speech is fallback-only') || source.includes('API voice uses backend endpoints') && !source.includes('provider-api-todo')],
   ['runtime_status_panel', source.includes('Companion runtime status') && source.includes('Last assistant response')],
   ['github_models_proxy_default', source.includes('GitHub Models (safe local proxy, recommended)') && source.includes('openai/gpt-4.1-mini') && source.includes('Safe proxy selected')],
+  ['github_models_public_proxy_route', source.includes('/api/github-models') && source.includes('same-origin or tunnel-forwarded safe proxy')],
+  ['tts_public_proxy_route', source.includes('/api/tts') && source.includes('same-origin or tunnel-forwarded safe proxy')],
+  ['motion_plan_fallback_builder', proxySource.includes('buildFallbackMotionPlan') && proxySource.includes('avatar_motion_plan_v1')],
   ['safe_proxy_key_hidden', source.includes('API key field hidden for safe proxy providers') && source.includes('.env.local server-side only')],
 
   ['provider_selector', source.includes('Model provider') && source.includes('Mock / test mode (no paid key required)') && source.includes('OpenRouter (OpenAI-compatible, supports :free models)') && source.includes('Gemini API key via local safe proxy') && source.includes('Local Ollama (dev/local)') && source.includes('Official OpenAI API key / project')],
@@ -45,7 +48,7 @@ const checks = [
   ['no_chatgpt_session_copy', source.includes('ChatGPT Free/Plus/Pro login is not the same as OpenAI API access') && source.includes('Use official API key/provider key only')],
   ['provider_docs_reference', source.includes('docs/MODEL_PROVIDERS.md')],
   ['gemini_env_placeholder', envExample.includes('VITE_GEMINI_PROXY_BASE=http://127.0.0.1:8787/api/gemini') && envExample.includes('GEMINI_API_KEY belongs in .env.local only')],
-  ['gemini_env_runtime', source.includes('Real calls go through the local/server Gemini proxy so the API key stays out of the browser bundle.')],
+  ['gemini_env_runtime', source.includes('Safe proxy selected:') && source.includes('same-origin or tunnel-forwarded safe proxy') && source.includes('localhost proxy when it opens on the Mac')],
   ['gemini_openai_compat_base', source.includes('http://127.0.0.1:8787/api/gemini')],
   ['gemini_secret_safe_stub', source.includes('full avatar chain continued with local fallback speech/movement')],
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],

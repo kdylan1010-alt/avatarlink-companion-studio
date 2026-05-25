@@ -107,15 +107,45 @@ function readStoredProxyBase(storageKey) {
   }
 }
 
-function resolveGithubModelsProxyBase() {
-  const envBase = import.meta.env.VITE_GITHUB_MODELS_PROXY_BASE
-  if (envBase) return envBase
-  const storedBase = readStoredProxyBase('githubModelsProxyBase')
-  if (storedBase) return storedBase
-  return PROVIDER_PRESETS.githubModels.apiBase
+function isLocalBrowserHost(hostname = '') {
+  return ['localhost', '127.0.0.1', '::1'].includes(String(hostname || '').toLowerCase())
 }
 
-const TTS_PROXY_BASE = import.meta.env.VITE_TTS_PROXY_BASE || 'http://127.0.0.1:8787/api/tts'
+function buildSameOriginProxyBase(routePath) {
+  if (typeof window === 'undefined') return routePath
+  const normalizedPath = routePath.startsWith('/') ? routePath : `/${routePath}`
+  return `${window.location.origin}${normalizedPath}`
+}
+
+function resolveSafeProxyBase({ envBase, storageKey, localDefault, publicRoute }) {
+  if (envBase) return envBase
+  const storedBase = readStoredProxyBase(storageKey)
+  if (storedBase) return storedBase
+  if (typeof window !== 'undefined' && !isLocalBrowserHost(window.location.hostname)) {
+    return buildSameOriginProxyBase(publicRoute)
+  }
+  return localDefault
+}
+
+function resolveGithubModelsProxyBase() {
+  return resolveSafeProxyBase({
+    envBase: import.meta.env.VITE_GITHUB_MODELS_PROXY_BASE,
+    storageKey: 'githubModelsProxyBase',
+    localDefault: PROVIDER_PRESETS.githubModels.apiBase,
+    publicRoute: '/api/github-models',
+  })
+}
+
+function resolveTtsProxyBase() {
+  return resolveSafeProxyBase({
+    envBase: import.meta.env.VITE_TTS_PROXY_BASE,
+    storageKey: 'ttsProxyBase',
+    localDefault: 'http://127.0.0.1:8787/api/tts',
+    publicRoute: '/api/tts',
+  })
+}
+
+const TTS_PROXY_BASE = resolveTtsProxyBase()
 const API_VOICE_PROVIDERS = new Set(['elevenlabs', 'openai', 'cartesia'])
 const VOWEL_TO_VISEME = {
   a: 'aa',
@@ -236,10 +266,10 @@ function buildProviderSelectedStatus(providerId, label, hasLocalKey) {
     return 'OAuth-ready connector scaffold selected — mocked until an official provider OAuth path is confirmed'
   }
   if (providerId === 'githubModels') {
-    return `Provider preset selected: ${label}. Real calls go through the local/server GitHub Models proxy so GITHUB_TOKEN stays out of the browser bundle.`
+    return `Safe proxy selected: ${label}. Real calls use the same-origin or tunnel-forwarded safe proxy when this app opens from a public URL, and the localhost proxy when it opens on the Mac, so GITHUB_TOKEN stays out of the browser bundle.`
   }
   if (providerId === 'gemini') {
-    return `Provider preset selected: ${label}. Real calls go through the local/server Gemini proxy so the API key stays out of the browser bundle.`
+    return `Safe proxy selected: ${label}. Real calls use the same-origin or tunnel-forwarded safe proxy when this app opens from a public URL, and the localhost proxy when it opens on the Mac, so the API key stays out of the browser bundle.`
   }
   if (hasLocalKey) {
     return `Provider preset selected: ${label}. Local BYOK key detected from ignored env only.`
