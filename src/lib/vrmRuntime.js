@@ -558,34 +558,98 @@ function createMotionPlanState() {
   }
 }
 
+function normalizeMovementCueEntry(cue, fallback = {}) {
+  const time = Number.isFinite(Number(cue?.time ?? cue?.startMs)) ? Number(cue.time ?? cue.startMs) : Number(fallback.time || 0)
+  const duration = Number.isFinite(Number(cue?.duration ?? cue?.durationMs)) ? Number(cue.duration ?? cue.durationMs) : Number(fallback.duration || 900)
+  const rawPart = String(cue?.part || fallback.part || 'body').trim()
+  const part = /^(left|right)hand$/i.test(rawPart) || /^(left|right)arm$/i.test(rawPart)
+    ? rawPart
+    : /head|neck/i.test(rawPart)
+      ? 'head'
+      : /eye|look|gaze/i.test(rawPart)
+        ? 'eyes'
+        : /arm|shoulder/i.test(rawPart)
+          ? 'arms'
+          : /hand|wrist/i.test(rawPart)
+            ? (/left/i.test(rawPart) ? 'leftHand' : 'rightHand')
+            : 'body'
+  const action = String(cue?.action || fallback.action || 'gesture').trim().toLowerCase()
+  return {
+    time: Math.max(0, Math.round(time)),
+    duration: clamp(Number.isFinite(duration) ? duration : 900, 220, 2600),
+    part,
+    action: /wave|bow|peek-around|nod|point|lean|raise|gesture|look/.test(action) ? action : action.includes('peek') ? 'peek-around' : 'gesture',
+    intensity: clamp(Number(cue?.intensity ?? fallback.intensity ?? 0.9), 0, 1.6),
+  }
+}
+
+function deriveFallbackMovementCues(spokenText = '') {
+  const source = String(spokenText || '').toLowerCase()
+  const cues = []
+  if (/wave|hello|hi\b/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'wave', intensity: 1.3, duration: 1450 })
+    cues.push({ time: 120, part: 'arms', action: 'raise', intensity: 1.0, duration: 1200 })
+    cues.push({ time: 140, part: 'head', action: 'nod', intensity: 0.65, duration: 720 })
+    cues.push({ time: 0, part: 'body', action: 'lean', intensity: 0.4, duration: 1150 })
+  }
+  if (/bow|bend/.test(source)) cues.push({ time: 0, part: 'body', action: 'bow', intensity: 1, duration: 1100 })
+  if (/peek/.test(source)) cues.push({ time: 0, part: 'body', action: 'peek-around', intensity: 1, duration: 1200 })
+  if (/point/.test(source)) cues.push({ time: 0, part: 'rightHand', action: 'point', intensity: 1, duration: 1200 })
+  if (/nod|yes/.test(source) && !cues.some((cue) => cue.action === 'nod')) cues.push({ time: 0, part: 'head', action: 'nod', intensity: 1, duration: 760 })
+  if (!cues.length) {
+    cues.push({ time: 0, part: 'body', action: 'lean', intensity: 0.55, duration: 900 })
+    cues.push({ time: 80, part: 'head', action: 'nod', intensity: 0.5, duration: 680 })
+    cues.push({ time: 100, part: 'rightHand', action: 'gesture', intensity: 0.55, duration: 780 })
+  }
+  return cues.map((cue) => normalizeMovementCueEntry(cue))
+}
+
 function normalizeMotionPlan(plan, spokenText = '') {
   const rawCues = Array.isArray(plan?.cues) ? plan.cues : []
+  const rawMovementCues = Array.isArray(plan?.movement_cues) ? plan.movement_cues : []
   const text = String(spokenText || plan?.spokenText || '')
   const fallbackDuration = Math.max(1200, Math.min(8500, text.length * 55))
+  const sharedMovementCues = (rawMovementCues.length ? rawMovementCues : deriveFallbackMovementCues(text)).slice(0, 40).map((cue) => normalizeMovementCueEntry(cue))
   const cues = rawCues.slice(0, 24).map((cue, index) => {
     const startMs = Number.isFinite(Number(cue.startMs)) ? Number(cue.startMs) : index * 450
     const durationMs = Number.isFinite(Number(cue.durationMs)) ? Number(cue.durationMs) : 650
     const body = cue.body || {}
+    const localMovements = Array.isArray(cue?.movements) && cue.movements.length
+      ? cue.movements.map((movement) => normalizeMovementCueEntry(movement, { time: startMs, duration: durationMs }))
+      : sharedMovementCues.filter((movement) => movement.time <= startMs + durationMs && movement.time + movement.duration >= startMs)
     const parts = {
-      body: clamp(Number(body.body ?? body.torso ?? cue.bodyIntensity ?? 1), 0, 2.2),
-      head: clamp(Number(body.head ?? cue.headIntensity ?? 1), 0, 2.2),
-      arms: clamp(Number(body.arms ?? cue.armIntensity ?? 1), 0, 2.4),
-      hands: clamp(Number(body.hands ?? cue.handIntensity ?? 1), 0, 2.6),
+      body: clamp(Number(body.body ?? body.torso ?? cue.bodyIntensity ?? (localMovements.some((movement) => movement.part === 'body') ? 1.0 : 0.68)), 0, 2.2),
+      head: clamp(Number(body.head ?? cue.headIntensity ?? (localMovements.some((movement) => movement.part === 'head') ? 1.0 : 0.74)), 0, 2.2),
+      arms: clamp(Number(body.arms ?? cue.armIntensity ?? (localMovements.some((movement) => /arm|hand/i.test(movement.part)) ? 1.1 : 0.72)), 0, 2.4),
+      hands: clamp(Number(body.hands ?? cue.handIntensity ?? (localMovements.some((movement) => /hand/i.test(movement.part)) ? 1.18 : 0.74)), 0, 2.6),
       hair: clamp(Number(body.hair ?? cue.hairIntensity ?? 1), 0, 2.6),
-      eyes: clamp(Number(body.eyes ?? cue.eyeIntensity ?? 1), 0, 2.0),
+      eyes: clamp(Number(body.eyes ?? cue.eyeIntensity ?? (localMovements.some((movement) => movement.part === 'eyes') ? 0.92 : 0.72)), 0, 2.0),
     }
     return {
       startMs: Math.max(0, startMs),
       durationMs: clamp(durationMs, 160, 2600),
-      text: String(cue.text || cue.spokenText || '').slice(0, 160),
+      text: String(cue.text || cue.spokenText || text || '').slice(0, 160),
       mood: ['idle', 'listening', 'speaking', 'celebrate'].includes(cue.mood) ? cue.mood : 'speaking',
       parts,
+      movements: localMovements,
     }
   })
   if (!cues.length) {
-    cues.push({ startMs: 0, durationMs: fallbackDuration, text: text.slice(0, 160), mood: 'speaking', parts: { body: 1, head: 1, arms: 1, hands: 1, hair: 1.35, eyes: 1 } })
+    cues.push({
+      startMs: 0,
+      durationMs: fallbackDuration,
+      text: text.slice(0, 160),
+      mood: 'speaking',
+      parts: { body: 1, head: 1, arms: 1, hands: 1, hair: 1.35, eyes: 1 },
+      movements: sharedMovementCues,
+    })
   }
-  return { spokenText: text, cues, totalDurationMs: Math.max(fallbackDuration, ...cues.map((cue) => cue.startMs + cue.durationMs)) }
+  return {
+    spokenText: text,
+    movementCues: sharedMovementCues,
+    cues,
+    totalDurationMs: Math.max(fallbackDuration, ...cues.map((cue) => cue.startMs + cue.durationMs), ...sharedMovementCues.map((cue) => cue.time + cue.duration)),
+  }
 }
 
 function createBodyPartMotionState() {
@@ -828,6 +892,105 @@ export async function createVrmPreview(canvas) {
     }
   }
 
+  const cueEnvelopeAt = (elapsed, cue) => {
+    const local = (elapsed - cue.startMs) / cue.durationMs
+    if (local < 0 || local > 1) return 0
+    return smoothstep(clamp(local / 0.22, 0, 1)) * (1 - smoothstep(clamp((local - 0.78) / 0.22, 0, 1)))
+  }
+
+  const collectActiveMovementDirectives = (elapsed) => {
+    const directives = []
+    for (const cue of motionPlanState.cues) {
+      const envelope = cueEnvelopeAt(elapsed, cue)
+      if (envelope <= 0.0001) continue
+      for (const movement of cue.movements || []) {
+        const movementLocal = (elapsed - movement.time) / movement.duration
+        if (movementLocal < 0 || movementLocal > 1) continue
+        directives.push({
+          ...movement,
+          envelope: envelope * smoothstep(clamp(movementLocal / 0.18, 0, 1)) * (1 - smoothstep(clamp((movementLocal - 0.82) / 0.18, 0, 1))),
+          progress: clamp(movementLocal, 0, 1),
+        })
+      }
+    }
+    return directives.filter((directive) => directive.envelope > 0.0001)
+  }
+
+  const labelTargetsMotionPart = (label = '', part = '') => {
+    if (!part) return false
+    if (part === 'body') return /torso|chest|spine|hips|pelvis|body/i.test(label)
+    if (part === 'head') return /head|neck/i.test(label)
+    if (part === 'eyes') return /eye/i.test(label)
+    if (part === 'arms') return /shoulder|upperarm|lowerarm|arm/i.test(label)
+    if (part === 'leftHand') return /left/i.test(label) && /shoulder|upperarm|lowerarm|hand|wrist/i.test(label)
+    if (part === 'rightHand') return /right/i.test(label) && /shoulder|upperarm|lowerarm|hand|wrist/i.test(label)
+    return false
+  }
+
+  const sumMotionDirectiveRotation = (label = '', directives = []) => {
+    const rotation = { x: 0, y: 0, z: 0 }
+    const lower = String(label || '').toLowerCase()
+    const isLeft = /left/.test(lower)
+    const isRight = /right/.test(lower)
+    const side = isLeft ? 1 : isRight ? -1 : 1
+    const isShoulder = /shoulder/.test(lower)
+    const isUpperArm = /upperarm/.test(lower)
+    const isLowerArm = /lowerarm/.test(lower)
+    const isHand = /hand|wrist/.test(lower)
+    const isTorso = /torso|chest|spine|hips|pelvis|body/.test(lower)
+    const isHead = /head/.test(lower)
+    const isNeck = /neck/.test(lower)
+    const isEye = /eye/.test(lower)
+
+    for (const directive of directives) {
+      if (!labelTargetsMotionPart(label, directive.part)) continue
+      const amp = directive.intensity * directive.envelope
+      const swing = Math.sin(directive.progress * Math.PI * (directive.action === 'wave' ? 4.5 : 2.0))
+      const halfSwing = Math.sin(directive.progress * Math.PI * 2)
+      if (directive.action === 'wave') {
+        if (isShoulder) { rotation.z += side * 0.42 * amp; rotation.x += -0.12 * amp }
+        if (isUpperArm) { rotation.z += side * 0.92 * amp; rotation.x += -0.38 * amp }
+        if (isLowerArm) { rotation.z += side * 0.22 * amp; rotation.x += -0.92 * amp }
+        if (isHand) { rotation.y += side * 0.72 * amp * swing; rotation.z += side * 0.22 * amp * halfSwing }
+        if (isHead || isNeck) rotation.x += 0.12 * amp
+        if (isTorso) rotation.y += -0.08 * side * amp
+      } else if (directive.action === 'raise') {
+        if (isShoulder) rotation.z += side * 0.28 * amp
+        if (isUpperArm) rotation.z += side * 0.44 * amp
+      } else if (directive.action === 'point') {
+        if (isShoulder) { rotation.z += side * 0.24 * amp; rotation.x += -0.1 * amp }
+        if (isUpperArm) { rotation.z += side * 0.65 * amp; rotation.x += -0.3 * amp }
+        if (isLowerArm) rotation.x += -0.42 * amp
+        if (isHand) { rotation.y += side * 0.22 * amp; rotation.z += side * 0.12 * amp }
+        if (isHead || isNeck) rotation.y += -side * 0.1 * amp
+      } else if (directive.action === 'bow') {
+        if (isTorso) rotation.x += 0.42 * amp
+        if (isNeck) rotation.x += 0.16 * amp
+        if (isHead) rotation.x += 0.26 * amp
+      } else if (directive.action === 'peek-around') {
+        if (isTorso) { rotation.y += side * 0.2 * amp; rotation.z += side * 0.18 * amp }
+        if (isNeck) rotation.y += side * 0.28 * amp
+        if (isHead) { rotation.y += side * 0.34 * amp; rotation.z += side * 0.08 * amp }
+        if (isEye) rotation.y += side * 0.14 * amp
+      } else if (directive.action === 'nod') {
+        if (isHead) rotation.x += 0.34 * amp * Math.sin(directive.progress * Math.PI * 2)
+        if (isNeck) rotation.x += 0.14 * amp * Math.sin(directive.progress * Math.PI * 2)
+      } else if (directive.action === 'lean') {
+        if (isTorso) { rotation.z += side * 0.16 * amp; rotation.x += -0.08 * amp }
+        if (isHead || isNeck) rotation.z += side * 0.06 * amp
+      } else if (directive.action === 'look') {
+        if (isHead || isNeck || isEye) rotation.y += side * 0.18 * amp
+      } else if (directive.action === 'gesture') {
+        if (isShoulder) rotation.z += side * 0.12 * amp
+        if (isUpperArm) rotation.z += side * 0.2 * amp
+        if (isLowerArm) rotation.x += -0.18 * amp
+        if (isHand) rotation.y += side * 0.18 * amp * swing
+        if (isHead) rotation.x += 0.06 * amp
+      }
+    }
+    return rotation
+  }
+
 
   const updateMotionPlanEnvelope = () => {
     if (!motionPlanState.active) return motionPlanState.current
@@ -835,21 +998,23 @@ export async function createVrmPreview(canvas) {
     const next = { body: 0.75, head: 0.75, arms: 0.75, hands: 0.75, hair: 1, eyes: 0.75 }
     let activeCue = null
     for (const cue of motionPlanState.cues) {
-      const local = (elapsed - cue.startMs) / cue.durationMs
-      if (local < 0 || local > 1) continue
-      const envelope = smoothstep(clamp(local / 0.22, 0, 1)) * (1 - smoothstep(clamp((local - 0.78) / 0.22, 0, 1)))
+      const envelope = cueEnvelopeAt(elapsed, cue)
+      if (envelope <= 0) continue
       activeCue = cue
       for (const key of Object.keys(next)) next[key] = Math.max(next[key], 0.75 + ((cue.parts?.[key] ?? 1) * envelope))
     }
+    const activeMovements = collectActiveMovementDirectives(elapsed)
     motionPlanState.current = next
     motionPlanState.snapshot = {
       active: true,
       cueCount: motionPlanState.cues.length,
+      movementCueCount: activeMovements.length,
       elapsedMs: Math.round(elapsed),
       totalDurationMs: motionPlanState.totalDurationMs,
       activeText: activeCue?.text || '',
       activeMood: activeCue?.mood || currentMood,
       current: { ...next },
+      activeMovements: activeMovements.map(({ part, action, intensity, progress }) => ({ part, action, intensity: Number(intensity.toFixed(2)), progress: Number(progress.toFixed(2)) })),
       source: 'github-gpt-motion-plan-json',
     }
     if (activeCue?.mood && activeCue.mood !== currentMood) currentMood = activeCue.mood
@@ -913,13 +1078,16 @@ export async function createVrmPreview(canvas) {
     if (!armRig.bones.length || armMotionState.active) return
     const weight = proceduralMoodWeight()
     const breathe = Math.sin(motionSeconds * 2.1)
+    const elapsed = performance.now() - motionPlanState.startedAtMs
+    const activeDirectives = motionPlanState.active ? collectActiveMovementDirectives(elapsed) : []
     for (const bone of armRig.bones) {
       const partBoost = /Hand|LowerArm|UpperArm|Shoulder/i.test(bone.label) ? 1 : /head/i.test(bone.label) ? 0.72 : 0.42
       const planBoost = partMotionMultiplier(bone.label)
+      const explicit = sumMotionDirectiveRotation(bone.label, activeDirectives)
       const rotation = {
-        x: bone.rotation.x * 0.2 * weight * partBoost * planBoost * Math.sin(motionSeconds * 1.35 + bone.phase) + (bone.label === 'chest' ? breathe * 0.018 * weight * planBoost : 0),
-        y: bone.rotation.y * 0.18 * weight * partBoost * planBoost * Math.sin(motionSeconds * 0.95 + bone.phase),
-        z: bone.rotation.z * 0.22 * weight * partBoost * planBoost * Math.cos(motionSeconds * 1.1 + bone.phase),
+        x: bone.rotation.x * 0.2 * weight * partBoost * planBoost * Math.sin(motionSeconds * 1.35 + bone.phase) + (bone.label === 'chest' ? breathe * 0.018 * weight * planBoost : 0) + explicit.x,
+        y: bone.rotation.y * 0.18 * weight * partBoost * planBoost * Math.sin(motionSeconds * 0.95 + bone.phase) + explicit.y,
+        z: bone.rotation.z * 0.22 * weight * partBoost * planBoost * Math.cos(motionSeconds * 1.1 + bone.phase) + explicit.z,
       }
       bone.euler.set(rotation.x, rotation.y, rotation.z)
       bone.quaternion.setFromEuler(bone.euler)
@@ -931,13 +1099,16 @@ export async function createVrmPreview(canvas) {
   const applyGenericProceduralBodyMotion = () => {
     if (!bodyPartRig.bones.length || bodyPartMotionState.active) return
     const weight = proceduralMoodWeight()
+    const elapsed = performance.now() - motionPlanState.startedAtMs
+    const activeDirectives = motionPlanState.active ? collectActiveMovementDirectives(elapsed) : []
     for (const entry of bodyPartRig.bones) {
       const partBoost = /Hand|Arm|Shoulder/i.test(entry.part) ? 1 : /head|neck/i.test(entry.part) ? 0.65 : 0.36
       const planBoost = partMotionMultiplier(entry.part)
+      const explicit = sumMotionDirectiveRotation(entry.part, activeDirectives)
       const rotation = {
-        x: entry.amplitude.x * 0.32 * weight * partBoost * planBoost * Math.sin(motionSeconds * 1.25 + entry.phase),
-        y: entry.amplitude.y * 0.26 * weight * partBoost * planBoost * Math.sin(motionSeconds * 0.85 + entry.phase),
-        z: entry.amplitude.z * 0.28 * weight * partBoost * planBoost * Math.cos(motionSeconds * 1.05 + entry.phase),
+        x: entry.amplitude.x * 0.32 * weight * partBoost * planBoost * Math.sin(motionSeconds * 1.25 + entry.phase) + explicit.x,
+        y: entry.amplitude.y * 0.26 * weight * partBoost * planBoost * Math.sin(motionSeconds * 0.85 + entry.phase) + explicit.y,
+        z: entry.amplitude.z * 0.28 * weight * partBoost * planBoost * Math.cos(motionSeconds * 1.05 + entry.phase) + explicit.z,
       }
       entry.euler.set(rotation.x, rotation.y, rotation.z)
       entry.quaternion.setFromEuler(entry.euler)
@@ -2223,7 +2394,14 @@ export async function createVrmPreview(canvas) {
       motionPlanState.totalDurationMs = normalized.totalDurationMs
       motionPlanState.cues = normalized.cues
       motionPlanState.current = { body: 1, head: 1, arms: 1, hands: 1, hair: 1.25, eyes: 1 }
-      motionPlanState.snapshot = { active: true, cueCount: normalized.cues.length, totalDurationMs: normalized.totalDurationMs, current: { ...motionPlanState.current }, source: 'github-gpt-motion-plan-json' }
+      motionPlanState.snapshot = {
+        active: true,
+        cueCount: normalized.cues.length,
+        movementCueCount: normalized.movementCues?.length || 0,
+        totalDurationMs: normalized.totalDurationMs,
+        current: { ...motionPlanState.current },
+        source: 'github-gpt-motion-plan-json',
+      }
       return motionPlanState.snapshot
     },
     getHairMotionSnapshot() {
@@ -2327,6 +2505,30 @@ export async function createVrmPreview(canvas) {
         availableParts: [...(bodyPartMotionState.snapshot.availableParts || [])],
         peakDegrees: JSON.parse(JSON.stringify(bodyPartMotionState.snapshot.peakDegrees || {})),
       }
+    },
+    captureCurrentBodyPartFrame(parts = []) {
+      const selected = Array.isArray(parts) && parts.length
+        ? bodyPartRig.bones.filter((entry) => parts.includes(entry.part))
+        : bodyPartRig.bones
+      return selected.map((entry) => {
+        const localTip = estimateBoneTipLocal(entry.bone)
+        const state = sampleBoneMotionState(entry.bone, localTip)
+        const baseQuat = entry.baseQuaternion || entry.bone.quaternion
+        const currentQuat = new THREE.Quaternion(...state.quaternion)
+        return {
+          part: entry.part,
+          boneName: entry.bone.name || entry.part,
+          beforeQuaternion: baseQuat.toArray().map((value) => Number(value.toFixed(4))),
+          afterQuaternion: state.quaternion,
+          quaternionAngleDeltaDeg: Number(THREE.MathUtils.radToDeg(baseQuat.angleTo(currentQuat)).toFixed(4)),
+          worldPosition: state.worldPosition,
+          tipWorldPosition: state.tipWorldPosition,
+          pivotScreen: state.pivotScreen,
+          tipScreen: state.tipScreen,
+          tipPixelProbe: state.tipPixelProbe,
+          worldAxes: state.worldAxes,
+        }
+      })
     },
     getArmMotionSnapshot() {
       return {

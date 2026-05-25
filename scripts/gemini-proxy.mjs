@@ -126,26 +126,210 @@ function buildFallbackMotionPlan(text) {
   }
 }
 
-function parseAvatarMotionPlanResponse(text) {
+function clampIntensity(value, fallback = 0.7) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.max(0, Math.min(1.5, Number(number.toFixed(2))))
+}
+
+function normalizeCuePart(value = '') {
+  const part = String(value || '').trim()
+  if (!part) return 'body'
+  if (/^(left|right)hand$/i.test(part)) return part
+  if (/^(left|right)arm$/i.test(part)) return part
+  if (/head|neck/i.test(part)) return 'head'
+  if (/chest|spine|torso|body|hips/i.test(part)) return 'body'
+  if (/arm|shoulder/i.test(part)) return 'arms'
+  if (/hand|wrist/i.test(part)) return /left/i.test(part) ? 'leftHand' : /right/i.test(part) ? 'rightHand' : 'rightHand'
+  if (/eye|look|gaze/i.test(part)) return 'eyes'
+  return part
+}
+
+function normalizeCueAction(value = '') {
+  const action = String(value || '').trim().toLowerCase()
+  if (!action) return 'gesture'
+  if (/wave|waving/.test(action)) return 'wave'
+  if (/bow|bend/.test(action)) return 'bow'
+  if (/peek|lean[- ]?out|look[- ]?around/.test(action)) return 'peek-around'
+  if (/nod/.test(action)) return 'nod'
+  if (/point/.test(action)) return 'point'
+  if (/lean/.test(action)) return 'lean'
+  if (/raise/.test(action)) return 'raise'
+  if (/look|glance|turn/.test(action)) return 'look'
+  return 'gesture'
+}
+
+function normalizeMovementCue(cue, fallback = {}) {
+  const time = Number.isFinite(Number(cue?.time ?? cue?.startMs)) ? Number(cue.time ?? cue.startMs) : Number(fallback.time || 0)
+  const duration = Number.isFinite(Number(cue?.duration ?? cue?.durationMs)) ? Number(cue.duration ?? cue.durationMs) : Number(fallback.duration || 900)
+  return {
+    time: Math.max(0, Math.round(time)),
+    part: normalizeCuePart(cue?.part || fallback.part || 'body'),
+    action: normalizeCueAction(cue?.action || fallback.action || 'gesture'),
+    intensity: clampIntensity(cue?.intensity, fallback.intensity ?? 0.9),
+    duration: Math.max(220, Math.min(2600, Math.round(duration))),
+  }
+}
+
+function deriveMovementCues(reply = '', userPrompt = '') {
+  const source = `${userPrompt} ${reply}`.toLowerCase()
+  const cues = []
+  if (/wave|hello|hi\b/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'wave', intensity: 1.35, duration: 1450 })
+    cues.push({ time: 120, part: 'arms', action: 'raise', intensity: 1.05, duration: 1200 })
+    cues.push({ time: 160, part: 'head', action: 'nod', intensity: 0.72, duration: 760 })
+    cues.push({ time: 0, part: 'body', action: 'lean', intensity: 0.45, duration: 1200 })
+  }
+  if (/bow|bend/.test(source)) cues.push({ time: 0, part: 'body', action: 'bow', intensity: 1.0, duration: 1200 })
+  if (/peek/.test(source)) cues.push({ time: 0, part: 'body', action: 'peek-around', intensity: 1.0, duration: 1300 })
+  if (/point/.test(source)) cues.push({ time: 0, part: 'rightHand', action: 'point', intensity: 1.0, duration: 1150 })
+  if (/nod|yes/.test(source) && !cues.some((cue) => cue.action === 'nod')) cues.push({ time: 0, part: 'head', action: 'nod', intensity: 1.0, duration: 780 })
+  if (!cues.length) {
+    cues.push({ time: 0, part: 'body', action: 'lean', intensity: 0.52, duration: 900 })
+    cues.push({ time: 60, part: 'head', action: 'nod', intensity: 0.48, duration: 680 })
+    cues.push({ time: 100, part: 'rightHand', action: 'gesture', intensity: 0.6, duration: 820 })
+  }
+  return cues.map((cue) => normalizeMovementCue(cue))
+}
+
+function mergeMovementCues(primary = [], secondary = []) {
+  const merged = []
+  const seen = new Set()
+  for (const cue of [...primary, ...secondary]) {
+    const normalized = normalizeMovementCue(cue)
+    const key = `${normalized.time}:${normalized.part}:${normalized.action}:${normalized.duration}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(normalized)
+  }
+  return merged.slice(0, 40)
+}
+
+function buildMotionPlanFromMovementCues(reply, movementCues = []) {
+  const spokenText = String(reply || '').trim() || 'Hello.'
+  const normalizedMovementCues = movementCues.map((cue) => normalizeMovementCue(cue)).slice(0, 40)
+  const cueMap = new Map()
+  for (const cue of normalizedMovementCues) {
+    const key = `${cue.time}:${cue.duration}`
+    if (!cueMap.has(key)) {
+      cueMap.set(key, {
+        startMs: cue.time,
+        durationMs: cue.duration,
+        text: spokenText,
+        mood: cue.action === 'bow' ? 'listening' : cue.action === 'wave' || cue.action === 'point' ? 'celebrate' : 'speaking',
+        body: { body: 0.5, head: 0.55, arms: 0.55, hands: 0.55, hair: 1.0, eyes: 0.65 },
+        movements: [],
+      })
+    }
+    const bucket = cueMap.get(key)
+    bucket.movements.push(cue)
+    if (cue.part === 'head') bucket.body.head = Math.max(bucket.body.head, 0.65 + cue.intensity * 0.55)
+    if (cue.part === 'body') bucket.body.body = Math.max(bucket.body.body, 0.65 + cue.intensity * 0.55)
+    if (cue.part === 'arms' || cue.part === 'leftArm' || cue.part === 'rightArm') bucket.body.arms = Math.max(bucket.body.arms, 0.72 + cue.intensity * 0.7)
+    if (cue.part === 'leftHand' || cue.part === 'rightHand') {
+      bucket.body.hands = Math.max(bucket.body.hands, 0.78 + cue.intensity * 0.78)
+      bucket.body.arms = Math.max(bucket.body.arms, 0.68 + cue.intensity * 0.52)
+    }
+    if (cue.part === 'eyes') bucket.body.eyes = Math.max(bucket.body.eyes, 0.65 + cue.intensity * 0.55)
+  }
+  const cues = [...cueMap.values()].sort((a, b) => a.startMs - b.startMs).slice(0, 24)
+  return {
+    format: 'avatar_motion_plan_v1',
+    spokenText,
+    movement_cues: normalizedMovementCues,
+    cues,
+  }
+}
+
+function inferEmotionFromPlan(motionPlan) {
+  const movementCues = Array.isArray(motionPlan?.movement_cues) ? motionPlan.movement_cues : []
+  if (movementCues.some((cue) => cue.action === 'wave' || cue.action === 'point')) return 'playful'
+  if (movementCues.some((cue) => cue.action === 'nod' || cue.action === 'lean')) return 'happy'
+  const cues = Array.isArray(motionPlan?.cues) ? motionPlan.cues : []
+  const avgHead = cues.length ? cues.reduce((sum, cue) => sum + Number(cue?.body?.head || 0), 0) / cues.length : 0
+  const avgHands = cues.length ? cues.reduce((sum, cue) => sum + Number(cue?.body?.hands || 0), 0) / cues.length : 0
+  if (avgHands >= 1.05 || avgHead >= 1.15) return 'playful'
+  if (avgHead >= 0.95) return 'happy'
+  if (avgHead >= 0.8) return 'curious'
+  return 'calm'
+}
+
+function buildMovementCueSchema(motionPlan, reply = '', userPrompt = '') {
+  if (Array.isArray(motionPlan?.movement_cues) && motionPlan.movement_cues.length) {
+    return motionPlan.movement_cues.map((cue) => normalizeMovementCue(cue)).slice(0, 40)
+  }
+  const cues = Array.isArray(motionPlan?.cues) ? motionPlan.cues : []
+  const expanded = cues.flatMap((cue) => {
+    if (Array.isArray(cue?.movements) && cue.movements.length) return cue.movements.map((movement) => normalizeMovementCue(movement, { time: cue.startMs, duration: cue.durationMs }))
+    return []
+  })
+  if (expanded.length) return expanded.slice(0, 40)
+  return deriveMovementCues(reply, userPrompt).slice(0, 40)
+}
+
+function buildSpeechCueSchema(reply, motionPlan) {
+  const cues = Array.isArray(motionPlan?.cues) ? motionPlan.cues : []
+  const emphasis = cues
+    .map((cue) => String(cue?.text || '').trim())
+    .filter(Boolean)
+    .slice(0, 6)
+  return {
+    pace: 'normal',
+    emphasis,
+  }
+}
+
+function buildAvatarResponseSchema(reply, motionPlan, parsed = {}, userPrompt = '') {
+  const normalizedReply = String(reply || '').trim() || 'Hello.'
+  const normalizedPlan = motionPlan && typeof motionPlan === 'object' ? motionPlan : buildMotionPlanFromMovementCues(normalizedReply, deriveMovementCues(normalizedReply, userPrompt))
+  const movement_cues = Array.isArray(parsed?.movement_cues) && parsed.movement_cues.length
+    ? mergeMovementCues(parsed.movement_cues, deriveMovementCues(normalizedReply, userPrompt))
+    : buildMovementCueSchema(normalizedPlan, normalizedReply, userPrompt)
+  const emotion = ['happy', 'playful', 'curious', 'calm'].includes(parsed?.emotion) ? parsed.emotion : inferEmotionFromPlan({ ...normalizedPlan, movement_cues })
+  return {
+    reply: normalizedReply,
+    emotion,
+    movement_cues,
+    speech_cues: parsed?.speech_cues && typeof parsed.speech_cues === 'object' ? parsed.speech_cues : buildSpeechCueSchema(normalizedReply, normalizedPlan),
+  }
+}
+
+function parseAvatarMotionPlanResponse(text, userPrompt = '') {
   const raw = String(text || '').trim()
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim()
   try {
     const parsed = JSON.parse(stripped)
-    if (parsed && typeof parsed === 'object' && typeof parsed.spokenText === 'string') {
-      const fallbackPlan = buildFallbackMotionPlan(parsed.spokenText)
-      const cues = Array.isArray(parsed.cues) && parsed.cues.length ? parsed.cues.slice(0, 24) : fallbackPlan.cues
-      return {
-        text: parsed.spokenText.trim(),
-        motionPlan: {
-          format: 'avatar_motion_plan_v1',
-          spokenText: parsed.spokenText.trim(),
-          cues,
-        },
+    if (parsed && typeof parsed === 'object') {
+      const candidateReply = typeof parsed.reply === 'string' ? parsed.reply.trim() : typeof parsed.spokenText === 'string' ? parsed.spokenText.trim() : ''
+      if (candidateReply) {
+        const providedMovementCues = mergeMovementCues(
+          Array.isArray(parsed.movement_cues) && parsed.movement_cues.length ? parsed.movement_cues : [],
+          deriveMovementCues(candidateReply, userPrompt),
+        )
+        const motionPlan = Array.isArray(parsed.cues) && parsed.cues.length
+          ? {
+              format: 'avatar_motion_plan_v1',
+              spokenText: candidateReply,
+              movement_cues: providedMovementCues.map((cue) => normalizeMovementCue(cue)),
+              cues: parsed.cues.slice(0, 24).map((cue) => ({ ...cue, movements: Array.isArray(cue?.movements) ? cue.movements.map((movement) => normalizeMovementCue(movement, { time: cue.startMs, duration: cue.durationMs })) : [] })),
+            }
+          : buildMotionPlanFromMovementCues(candidateReply, providedMovementCues)
+        return {
+          text: candidateReply,
+          motionPlan,
+          schema: buildAvatarResponseSchema(candidateReply, motionPlan, parsed, userPrompt),
+        }
       }
     }
   } catch {}
-  const fallbackPlan = buildFallbackMotionPlan(raw)
-  return { text: fallbackPlan.spokenText, motionPlan: fallbackPlan }
+  const fallbackReply = raw || 'Hello.'
+  const fallbackMovementCues = deriveMovementCues(fallbackReply, userPrompt)
+  const fallbackPlan = buildMotionPlanFromMovementCues(fallbackReply, fallbackMovementCues)
+  return {
+    text: fallbackPlan.spokenText,
+    motionPlan: fallbackPlan,
+    schema: buildAvatarResponseSchema(fallbackPlan.spokenText, fallbackPlan, {}, userPrompt),
+  }
 }
 
 function classifyGithubModelsError(status, bodyText) {
@@ -177,8 +361,18 @@ async function callGithubModels({ model, systemPrompt, userPrompt }) {
     body: JSON.stringify({
       model: selectedModel,
       messages: [
-        { role: 'system', content: `${systemPrompt || 'You are an AvatarLink companion.'}
-You control an upper-body avatar. Return STRICT JSON only, no markdown. Schema: {"spokenText":"1-2 short sentences the avatar will say aloud","cues":[{"startMs":0,"durationMs":700,"text":"spoken words covered by this cue","mood":"speaking","body":{"body":1.0,"head":1.0,"arms":1.0,"hands":1.0,"hair":1.3,"eyes":1.0}}]}. Values 0-2.5. Cues must describe how every part moves while that exact text is being spoken.` },
+        {
+          role: 'system',
+          content: `${systemPrompt || 'You are an AvatarLink companion.'}
+You control an upper-body avatar. Return STRICT JSON only, no markdown, matching this exact shape:
+{"reply":"short spoken reply only","emotion":"happy|playful|curious|calm","movement_cues":[{"time":0,"part":"rightHand","action":"wave","intensity":1.2,"duration":1200}],"speech_cues":{"pace":"normal","emphasis":["optional short phrase"]}}
+Rules:
+- movement_cues must be concrete motions that can be animated on bones, never vague intensity buckets.
+- Allowed actions: wave, bow, peek-around, nod, point, lean, raise, gesture, look.
+- Allowed parts: head, body, arms, leftHand, rightHand, eyes.
+- For greetings like wave/hello, include an actual wave cue on leftHand or rightHand plus any needed arm/head/body support cues.
+- Keep reply natural and brief. No canned 'Archivist Echo' or 'I heard'.`
+        },
         { role: 'user', content: userPrompt || 'Hello' },
       ],
       temperature: 0.45,
@@ -191,8 +385,17 @@ You control an upper-body avatar. Return STRICT JSON only, no markdown. Schema: 
   }
   const parsed = JSON.parse(bodyText)
   const rawText = parsed?.choices?.[0]?.message?.content?.trim()
-  const motionParsed = parseAvatarMotionPlanResponse(rawText || '')
-  return { ok: true, text: motionParsed.text || 'GitHub Models returned an empty response.', motionPlan: motionParsed.motionPlan, model: selectedModel }
+  const motionParsed = parseAvatarMotionPlanResponse(rawText || '', userPrompt || '')
+  return {
+    ok: true,
+    text: motionParsed.text || 'GitHub Models returned an empty response.',
+    reply: motionParsed.schema?.reply || motionParsed.text || 'GitHub Models returned an empty response.',
+    emotion: motionParsed.schema?.emotion || 'calm',
+    movement_cues: motionParsed.schema?.movement_cues || [],
+    speech_cues: motionParsed.schema?.speech_cues || { pace: 'normal', emphasis: [] },
+    motionPlan: motionParsed.motionPlan,
+    model: selectedModel,
+  }
 }
 
 
