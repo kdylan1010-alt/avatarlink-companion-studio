@@ -574,11 +574,42 @@ function normalizeMovementCueEntry(cue, fallback = {}) {
             ? (/left/i.test(rawPart) ? 'leftHand' : 'rightHand')
             : 'body'
   const action = String(cue?.action || fallback.action || 'gesture').trim().toLowerCase()
+  const normalizedAction = /wave|bow|peek-around|nod|point|reach|clap|cheer|think|surprised-jump|beckon|hand-on-heart|lean|raise|gesture|look|hug|kiss|blush|shake-head|thumbs-up|shrug/.test(action)
+    ? action
+    : /peek/.test(action)
+      ? 'peek-around'
+      : /reach|reaching|offer|extend/.test(action)
+        ? 'reach'
+        : /clap|applaud/.test(action)
+          ? 'clap'
+          : /cheer|celebrate|hooray|yay/.test(action)
+            ? 'cheer'
+            : /think|ponder|consider|hmm/.test(action)
+              ? 'think'
+              : /surprised[- ]?jump|surprise[- ]?jump|startle|gasp|flinch/.test(action)
+                ? 'surprised-jump'
+                : /beckon|come here|come-here|invite over/.test(action)
+                  ? 'beckon'
+                  : /hand[- ]?on[- ]?heart|hand on heart|sincere|heartfelt|pledge/.test(action)
+                    ? 'hand-on-heart'
+      : /hug|embrace|cuddle/.test(action)
+        ? 'hug'
+        : /kiss|smooch|mwah/.test(action)
+          ? 'kiss'
+          : /blush|shy|bashful|fluster/.test(action)
+            ? 'blush'
+            : /shake(?:\s+your)?\s+head|head\s+shake|disagree|\bno\b/.test(action)
+              ? 'shake-head'
+              : /thumbs?[ -]?up|approve|ok(?:ay)? gesture/.test(action)
+                ? 'thumbs-up'
+                : /shrug|unsure|what can i say/.test(action)
+                  ? 'shrug'
+                  : 'gesture'
   return {
     time: Math.max(0, Math.round(time)),
     duration: clamp(Number.isFinite(duration) ? duration : 900, 220, 2600),
     part,
-    action: /wave|bow|peek-around|nod|point|lean|raise|gesture|look/.test(action) ? action : action.includes('peek') ? 'peek-around' : 'gesture',
+    action: normalizedAction,
     intensity: clamp(Number(cue?.intensity ?? fallback.intensity ?? 0.9), 0, 1.6),
   }
 }
@@ -591,6 +622,67 @@ function deriveFallbackMovementCues(spokenText = '') {
     cues.push({ time: 120, part: 'arms', action: 'raise', intensity: 1.0, duration: 1200 })
     cues.push({ time: 140, part: 'head', action: 'nod', intensity: 0.65, duration: 720 })
     cues.push({ time: 0, part: 'body', action: 'lean', intensity: 0.4, duration: 1150 })
+  }
+  if (/reach|reaching|offer|extend your hand/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'reach', intensity: 1.0, duration: 1180 })
+    cues.push({ time: 40, part: 'body', action: 'reach', intensity: 0.58, duration: 1040 })
+  }
+  if (/clap|applaud/.test(source)) {
+    cues.push({ time: 0, part: 'leftHand', action: 'clap', intensity: 1.05, duration: 1200 })
+    cues.push({ time: 0, part: 'rightHand', action: 'clap', intensity: 1.05, duration: 1200 })
+    cues.push({ time: 60, part: 'head', action: 'clap', intensity: 0.38, duration: 980 })
+  }
+  if (/cheer|celebrate|hooray|yay/.test(source)) {
+    cues.push({ time: 0, part: 'arms', action: 'cheer', intensity: 1.08, duration: 1300 })
+    cues.push({ time: 0, part: 'head', action: 'cheer', intensity: 0.82, duration: 1080 })
+    cues.push({ time: 40, part: 'body', action: 'cheer', intensity: 0.72, duration: 1200 })
+  }
+  if (/think|ponder|consider|hmm/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'think', intensity: 0.95, duration: 1180 })
+    cues.push({ time: 60, part: 'head', action: 'think', intensity: 0.74, duration: 1120 })
+  }
+  if (/surprised[- ]?jump|surprise[- ]?jump|startle|gasp|flinch/.test(source)) {
+    cues.push({ time: 0, part: 'arms', action: 'surprised-jump', intensity: 1.08, duration: 980 })
+    cues.push({ time: 0, part: 'head', action: 'surprised-jump', intensity: 0.92, duration: 900 })
+    cues.push({ time: 30, part: 'body', action: 'surprised-jump', intensity: 0.82, duration: 940 })
+  }
+  if (/beckon|come here|come-here|invite over/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'beckon', intensity: 1.0, duration: 1180 })
+    cues.push({ time: 60, part: 'head', action: 'beckon', intensity: 0.42, duration: 920 })
+    cues.push({ time: 40, part: 'body', action: 'beckon', intensity: 0.34, duration: 900 })
+  }
+  if (/hand[- ]?on[- ]?heart|hand on heart|sincere|heartfelt|pledge/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'hand-on-heart', intensity: 0.94, duration: 1260 })
+    cues.push({ time: 40, part: 'rightArm', action: 'hand-on-heart', intensity: 0.86, duration: 1180 })
+    cues.push({ time: 80, part: 'head', action: 'hand-on-heart', intensity: 0.42, duration: 980 })
+    cues.push({ time: 0, part: 'body', action: 'hand-on-heart', intensity: 0.52, duration: 1180 })
+  }
+  if (/hug|embrace|cuddle/.test(source)) {
+    cues.push({ time: 0, part: 'leftHand', action: 'hug', intensity: 1.1, duration: 1400 })
+    cues.push({ time: 0, part: 'rightHand', action: 'hug', intensity: 1.1, duration: 1400 })
+    cues.push({ time: 120, part: 'body', action: 'hug', intensity: 0.74, duration: 1280 })
+    cues.push({ time: 180, part: 'head', action: 'hug', intensity: 0.46, duration: 920 })
+  }
+  if (/kiss|smooch|mwah/.test(source)) {
+    cues.push({ time: 0, part: 'head', action: 'kiss', intensity: 1.0, duration: 980 })
+    cues.push({ time: 40, part: 'body', action: 'kiss', intensity: 0.82, duration: 980 })
+    cues.push({ time: 90, part: 'rightHand', action: 'kiss', intensity: 0.48, duration: 860 })
+  }
+  if (/blush|shy|bashful|fluster/.test(source)) {
+    cues.push({ time: 0, part: 'head', action: 'blush', intensity: 0.92, duration: 1200 })
+    cues.push({ time: 60, part: 'leftHand', action: 'blush', intensity: 0.78, duration: 1080 })
+    cues.push({ time: 60, part: 'rightHand', action: 'blush', intensity: 0.56, duration: 1080 })
+  }
+  if (/shake(?:\s+your)?\s+head|head\s+shake|\bno\b|disagree/.test(source)) {
+    cues.push({ time: 0, part: 'head', action: 'shake-head', intensity: 1.05, duration: 1100 })
+  }
+  if (/thumbs?[ -]?up|approve|nice job/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'thumbs-up', intensity: 1.0, duration: 1050 })
+    cues.push({ time: 40, part: 'arms', action: 'thumbs-up', intensity: 0.82, duration: 1050 })
+  }
+  if (/shrug|not sure|unsure|i guess|who knows/.test(source)) {
+    cues.push({ time: 0, part: 'arms', action: 'shrug', intensity: 0.95, duration: 1000 })
+    cues.push({ time: 60, part: 'head', action: 'shrug', intensity: 0.55, duration: 880 })
   }
   if (/bow|bend/.test(source)) cues.push({ time: 0, part: 'body', action: 'bow', intensity: 1, duration: 1100 })
   if (/peek/.test(source)) cues.push({ time: 0, part: 'body', action: 'peek-around', intensity: 1, duration: 1200 })
@@ -963,6 +1055,64 @@ export async function createVrmPreview(canvas) {
         if (isLowerArm) rotation.x += -0.42 * amp
         if (isHand) { rotation.y += side * 0.22 * amp; rotation.z += side * 0.12 * amp }
         if (isHead || isNeck) rotation.y += -side * 0.1 * amp
+      } else if (directive.action === 'reach') {
+        const reachPulse = Math.sin(directive.progress * Math.PI)
+        if (isShoulder) { rotation.z += side * 0.22 * amp; rotation.x += -0.14 * amp * reachPulse }
+        if (isUpperArm) { rotation.z += side * 0.56 * amp; rotation.x += -0.4 * amp * reachPulse }
+        if (isLowerArm) rotation.x += -0.54 * amp
+        if (isHand) { rotation.y += side * 0.18 * amp; rotation.z += side * 0.08 * amp }
+        if (isTorso) { rotation.x += -0.12 * amp * reachPulse; rotation.y += -0.03 * side * amp }
+      } else if (directive.action === 'clap') {
+        const clapBeat = Math.sin(directive.progress * Math.PI * 4)
+        if (isShoulder) { rotation.z += side * 0.34 * amp; rotation.x += -0.12 * amp }
+        if (isUpperArm) { rotation.z += side * 0.72 * amp; rotation.x += -0.34 * amp }
+        if (isLowerArm) rotation.x += -0.88 * amp
+        if (isHand) { rotation.y += -side * 0.52 * amp * Math.abs(clapBeat); rotation.z += side * 0.16 * amp * clapBeat }
+        if (isHead || isNeck) rotation.x += 0.06 * amp
+      } else if (directive.action === 'cheer') {
+        const cheerPulse = Math.sin(directive.progress * Math.PI * 2)
+        if (isShoulder) { rotation.z += side * 0.44 * amp; rotation.x += -0.12 * amp }
+        if (isUpperArm) { rotation.z += side * 1.02 * amp; rotation.x += -0.36 * amp }
+        if (isLowerArm) rotation.x += -0.48 * amp
+        if (isHand) rotation.y += side * 0.24 * amp * cheerPulse
+        if (isHead) { rotation.x += 0.18 * amp; rotation.y += side * 0.08 * amp * cheerPulse }
+        if (isNeck) rotation.x += 0.08 * amp
+        if (isTorso) rotation.x += -0.12 * amp
+      } else if (directive.action === 'think') {
+        const thinkPulse = Math.sin(directive.progress * Math.PI)
+        if (isShoulder) rotation.z += side * 0.12 * amp
+        if (isUpperArm) { rotation.z += side * 0.3 * amp; rotation.x += -0.18 * amp }
+        if (isLowerArm) rotation.x += -0.66 * amp
+        if (isHand) { rotation.y += side * 0.34 * amp; rotation.z += side * 0.14 * amp * thinkPulse }
+        if (isHead) { rotation.y += side * 0.14 * amp; rotation.z += side * 0.12 * amp }
+        if (isNeck) rotation.y += side * 0.08 * amp
+      } else if (directive.action === 'surprised-jump') {
+        const startle = Math.sin(directive.progress * Math.PI)
+        if (isShoulder) { rotation.z += side * 0.42 * amp; rotation.x += -0.28 * amp * startle }
+        if (isUpperArm) { rotation.z += side * 0.88 * amp; rotation.x += -0.14 * amp }
+        if (isLowerArm) rotation.x += -0.48 * amp
+        if (isHand) rotation.y += side * 0.3 * amp
+        if (isHead) { rotation.x += -0.54 * amp * startle; rotation.y += side * 0.22 * amp; rotation.z += side * 0.12 * amp }
+        if (isNeck) rotation.x += -0.22 * amp * startle
+        if (isTorso) { rotation.x += -0.34 * amp * startle; rotation.z += side * 0.1 * amp }
+      } else if (directive.action === 'beckon') {
+        const beckonLoop = Math.sin(directive.progress * Math.PI * 4)
+        if (isShoulder) { rotation.z += side * 0.18 * amp; rotation.x += -0.08 * amp }
+        if (isUpperArm) { rotation.z += side * 0.34 * amp; rotation.x += -0.2 * amp }
+        if (isLowerArm) rotation.x += -0.44 * amp
+        if (isHand) { rotation.y += side * 0.56 * amp * beckonLoop; rotation.z += side * 0.18 * amp }
+        if (isHead) { rotation.y += -side * 0.14 * amp; rotation.x += 0.08 * amp }
+        if (isNeck) rotation.y += -side * 0.08 * amp
+        if (isTorso) rotation.x += -0.08 * amp
+      } else if (directive.action === 'hand-on-heart') {
+        const sincerePulse = Math.sin(directive.progress * Math.PI)
+        if (isShoulder) { rotation.z += side * 0.16 * amp; rotation.x += -0.06 * amp }
+        if (isUpperArm) { rotation.z += side * 0.36 * amp; rotation.x += -0.24 * amp * sincerePulse }
+        if (isLowerArm) { rotation.x += -0.74 * amp; rotation.y += side * 0.12 * amp }
+        if (isHand) { rotation.y += side * 0.42 * amp; rotation.z += side * 0.1 * amp * sincerePulse }
+        if (isTorso) { rotation.x += -0.08 * amp; rotation.y += -0.05 * side * amp }
+        if (isHead) { rotation.x += 0.08 * amp; rotation.y += -0.04 * side * amp }
+        if (isNeck) rotation.x += 0.04 * amp
       } else if (directive.action === 'bow') {
         if (isTorso) rotation.x += 0.42 * amp
         if (isNeck) rotation.x += 0.16 * amp
@@ -978,6 +1128,45 @@ export async function createVrmPreview(canvas) {
       } else if (directive.action === 'lean') {
         if (isTorso) { rotation.z += side * 0.16 * amp; rotation.x += -0.08 * amp }
         if (isHead || isNeck) rotation.z += side * 0.06 * amp
+      } else if (directive.action === 'hug') {
+        const chestPulse = Math.sin(directive.progress * Math.PI)
+        if (isShoulder) { rotation.z += side * 0.28 * amp; rotation.x += -0.12 * amp * chestPulse }
+        if (isUpperArm) { rotation.z += side * 0.86 * amp; rotation.x += -0.48 * amp * chestPulse }
+        if (isLowerArm) { rotation.x += -1.02 * amp; rotation.y += side * 0.16 * amp }
+        if (isHand) { rotation.y += side * 0.48 * amp; rotation.z += side * 0.18 * amp * chestPulse }
+        if (isTorso) { rotation.x += 0.16 * amp * chestPulse; rotation.y += -0.06 * side * amp }
+        if (isHead || isNeck) rotation.x += 0.12 * amp * chestPulse
+      } else if (directive.action === 'kiss') {
+        const leanPulse = Math.sin(directive.progress * Math.PI)
+        if (isTorso) { rotation.x += -0.22 * amp * leanPulse; rotation.y += -0.04 * side * amp }
+        if (isNeck) { rotation.x += -0.14 * amp * leanPulse; rotation.y += -0.05 * side * amp }
+        if (isHead) { rotation.x += -0.2 * amp * leanPulse; rotation.y += -0.08 * side * amp }
+        if (isHand) rotation.z += side * 0.08 * amp * halfSwing
+      } else if (directive.action === 'blush') {
+        const shyPulse = Math.sin(directive.progress * Math.PI)
+        if (isShoulder) rotation.z += side * 0.1 * amp
+        if (isUpperArm) { rotation.z += side * 0.26 * amp; rotation.x += -0.08 * amp }
+        if (isLowerArm) rotation.x += -0.24 * amp * shyPulse
+        if (isHand) { rotation.y += side * 0.34 * amp; rotation.z += side * 0.16 * amp * shyPulse }
+        if (isNeck) rotation.y += side * 0.08 * amp
+        if (isHead) { rotation.y += side * 0.14 * amp; rotation.z += side * 0.1 * amp * shyPulse; rotation.x += 0.06 * amp }
+      } else if (directive.action === 'shake-head') {
+        const shake = Math.sin(directive.progress * Math.PI * 4)
+        if (isNeck) rotation.y += side * 0.16 * amp * shake
+        if (isHead) { rotation.y += side * 0.34 * amp * shake; rotation.z += side * 0.04 * amp * shake }
+        if (isEye) rotation.y += side * 0.08 * amp * shake
+      } else if (directive.action === 'thumbs-up') {
+        if (isShoulder) { rotation.z += side * 0.18 * amp; rotation.x += -0.08 * amp }
+        if (isUpperArm) { rotation.z += side * 0.42 * amp; rotation.x += -0.26 * amp }
+        if (isLowerArm) rotation.x += -0.46 * amp
+        if (isHand) { rotation.y += side * 0.52 * amp; rotation.z += side * 0.18 * amp * halfSwing }
+        if (isHead || isNeck) rotation.x += 0.04 * amp
+      } else if (directive.action === 'shrug') {
+        const shrugPulse = Math.sin(directive.progress * Math.PI)
+        if (isShoulder) { rotation.z += side * 0.3 * amp * shrugPulse; rotation.x += 0.08 * amp }
+        if (isUpperArm) rotation.z += side * 0.18 * amp * shrugPulse
+        if (isLowerArm) rotation.x += -0.12 * amp * shrugPulse
+        if (isHead || isNeck) { rotation.x += 0.08 * amp; rotation.z += side * 0.08 * amp }
       } else if (directive.action === 'look') {
         if (isHead || isNeck || isEye) rotation.y += side * 0.18 * amp
       } else if (directive.action === 'gesture') {
