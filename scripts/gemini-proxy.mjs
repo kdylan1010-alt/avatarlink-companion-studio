@@ -153,8 +153,21 @@ function normalizeCueAction(value = '') {
   if (/peek|lean[- ]?out|look[- ]?around/.test(action)) return 'peek-around'
   if (/nod/.test(action)) return 'nod'
   if (/point/.test(action)) return 'point'
+  if (/reach|reaching|offer|extend/.test(action)) return 'reach'
+  if (/clap|applaud/.test(action)) return 'clap'
+  if (/cheer|celebrate|hooray|yay/.test(action)) return 'cheer'
+  if (/think|ponder|consider|hmm/.test(action)) return 'think'
+  if (/surprised[- ]?jump|surprise[- ]?jump|startle|gasp|flinch/.test(action)) return 'surprised-jump'
+  if (/beckon|come here|come-here|invite over/.test(action)) return 'beckon'
+  if (/hand[- ]?on[- ]?heart|hand on heart|sincere|heartfelt|pledge/.test(action)) return 'hand-on-heart'
   if (/lean/.test(action)) return 'lean'
   if (/raise/.test(action)) return 'raise'
+  if (/hug|embrace|cuddle/.test(action)) return 'hug'
+  if (/kiss|smooch|mwah/.test(action)) return 'kiss'
+  if (/blush|shy|bashful|fluster/.test(action)) return 'blush'
+  if (/shake[- ]?head|head[- ]?shake|disagree|no\b/.test(action)) return 'shake-head'
+  if (/thumbs?[ -]?up|approve|ok(?:ay)? gesture/.test(action)) return 'thumbs-up'
+  if (/shrug|unsure|what can i say/.test(action)) return 'shrug'
   if (/look|glance|turn/.test(action)) return 'look'
   return 'gesture'
 }
@@ -179,6 +192,67 @@ function deriveMovementCues(reply = '', userPrompt = '') {
     cues.push({ time: 120, part: 'arms', action: 'raise', intensity: 1.05, duration: 1200 })
     cues.push({ time: 160, part: 'head', action: 'nod', intensity: 0.72, duration: 760 })
     cues.push({ time: 0, part: 'body', action: 'lean', intensity: 0.45, duration: 1200 })
+  }
+  if (/reach|reaching|offer|extend your hand/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'reach', intensity: 1.0, duration: 1180 })
+    cues.push({ time: 40, part: 'body', action: 'reach', intensity: 0.58, duration: 1040 })
+  }
+  if (/clap|applaud/.test(source)) {
+    cues.push({ time: 0, part: 'leftHand', action: 'clap', intensity: 1.05, duration: 1200 })
+    cues.push({ time: 0, part: 'rightHand', action: 'clap', intensity: 1.05, duration: 1200 })
+    cues.push({ time: 60, part: 'head', action: 'clap', intensity: 0.38, duration: 980 })
+  }
+  if (/cheer|celebrate|hooray|yay/.test(source)) {
+    cues.push({ time: 0, part: 'arms', action: 'cheer', intensity: 1.08, duration: 1300 })
+    cues.push({ time: 0, part: 'head', action: 'cheer', intensity: 0.82, duration: 1080 })
+    cues.push({ time: 40, part: 'body', action: 'cheer', intensity: 0.72, duration: 1200 })
+  }
+  if (/think|ponder|consider|hmm/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'think', intensity: 0.95, duration: 1180 })
+    cues.push({ time: 60, part: 'head', action: 'think', intensity: 0.74, duration: 1120 })
+  }
+  if (/surprised[- ]?jump|surprise[- ]?jump|startle|gasp|flinch/.test(source)) {
+    cues.push({ time: 0, part: 'arms', action: 'surprised-jump', intensity: 1.08, duration: 980 })
+    cues.push({ time: 0, part: 'head', action: 'surprised-jump', intensity: 0.92, duration: 900 })
+    cues.push({ time: 30, part: 'body', action: 'surprised-jump', intensity: 0.82, duration: 940 })
+  }
+  if (/beckon|come here|come-here|invite over/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'beckon', intensity: 1.0, duration: 1180 })
+    cues.push({ time: 60, part: 'head', action: 'beckon', intensity: 0.42, duration: 920 })
+    cues.push({ time: 40, part: 'body', action: 'beckon', intensity: 0.34, duration: 900 })
+  }
+  if (/hand[- ]?on[- ]?heart|hand on heart|sincere|heartfelt|pledge/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'hand-on-heart', intensity: 0.94, duration: 1260 })
+    cues.push({ time: 40, part: 'rightArm', action: 'hand-on-heart', intensity: 0.86, duration: 1180 })
+    cues.push({ time: 80, part: 'head', action: 'hand-on-heart', intensity: 0.42, duration: 980 })
+    cues.push({ time: 0, part: 'body', action: 'hand-on-heart', intensity: 0.52, duration: 1180 })
+  }
+  if (/hug|embrace|cuddle/.test(source)) {
+    cues.push({ time: 0, part: 'leftHand', action: 'hug', intensity: 1.1, duration: 1400 })
+    cues.push({ time: 0, part: 'rightHand', action: 'hug', intensity: 1.1, duration: 1400 })
+    cues.push({ time: 120, part: 'body', action: 'hug', intensity: 0.74, duration: 1280 })
+    cues.push({ time: 180, part: 'head', action: 'hug', intensity: 0.46, duration: 920 })
+  }
+  if (/kiss|smooch|mwah/.test(source)) {
+    cues.push({ time: 0, part: 'head', action: 'kiss', intensity: 1.0, duration: 980 })
+    cues.push({ time: 40, part: 'body', action: 'kiss', intensity: 0.82, duration: 980 })
+    cues.push({ time: 90, part: 'rightHand', action: 'kiss', intensity: 0.48, duration: 860 })
+  }
+  if (/blush|shy|bashful|fluster/.test(source)) {
+    cues.push({ time: 0, part: 'head', action: 'blush', intensity: 0.92, duration: 1200 })
+    cues.push({ time: 60, part: 'leftHand', action: 'blush', intensity: 0.78, duration: 1080 })
+    cues.push({ time: 60, part: 'rightHand', action: 'blush', intensity: 0.56, duration: 1080 })
+  }
+  if (/shake(?:\s+your)?\s+head|head\s+shake|\bno\b|disagree/.test(source)) {
+    cues.push({ time: 0, part: 'head', action: 'shake-head', intensity: 1.05, duration: 1100 })
+  }
+  if (/thumbs?[ -]?up|approve|nice job/.test(source)) {
+    cues.push({ time: 0, part: 'rightHand', action: 'thumbs-up', intensity: 1.0, duration: 1050 })
+    cues.push({ time: 40, part: 'arms', action: 'thumbs-up', intensity: 0.82, duration: 1050 })
+  }
+  if (/shrug|not sure|unsure|i guess|who knows/.test(source)) {
+    cues.push({ time: 0, part: 'arms', action: 'shrug', intensity: 0.95, duration: 1000 })
+    cues.push({ time: 60, part: 'head', action: 'shrug', intensity: 0.55, duration: 880 })
   }
   if (/bow|bend/.test(source)) cues.push({ time: 0, part: 'body', action: 'bow', intensity: 1.0, duration: 1200 })
   if (/peek/.test(source)) cues.push({ time: 0, part: 'body', action: 'peek-around', intensity: 1.0, duration: 1300 })
@@ -368,9 +442,10 @@ You control an upper-body avatar. Return STRICT JSON only, no markdown, matching
 {"reply":"short spoken reply only","emotion":"happy|playful|curious|calm","movement_cues":[{"time":0,"part":"rightHand","action":"wave","intensity":1.2,"duration":1200}],"speech_cues":{"pace":"normal","emphasis":["optional short phrase"]}}
 Rules:
 - movement_cues must be concrete motions that can be animated on bones, never vague intensity buckets.
-- Allowed actions: wave, bow, peek-around, nod, point, lean, raise, gesture, look.
+- Allowed actions: wave, bow, peek-around, nod, point, reach, clap, cheer, think, surprised-jump, beckon, hand-on-heart, lean, raise, gesture, look, hug, kiss, blush, shake-head, thumbs-up, shrug.
 - Allowed parts: head, body, arms, leftHand, rightHand, eyes.
 - For greetings like wave/hello, include an actual wave cue on leftHand or rightHand plus any needed arm/head/body support cues.
+- For hug, use both hands/arms plus body support. For kiss, use head/body lean support. For blush, pair shy head motion with at least one hand cue. For shake-head, animate the head/neck rather than whole-body sway. For thumbs-up, include rightHand plus arm support. For shrug, include shoulder/arm lift with a small head reaction. For reach, extend a hand/arm forward. For clap, drive both hands together. For cheer, lift both arms with head/body excitement. For think, place one hand near the face with a head tilt. For surprised-jump, create an upper-body startle without moving the root. For beckon, use a repeated inward hand invitation gesture. For hand-on-heart, place one hand to chest with gentle torso/head sincerity support.
 - Keep reply natural and brief. No canned 'Archivist Echo' or 'I heard'.`
         },
         { role: 'user', content: userPrompt || 'Hello' },

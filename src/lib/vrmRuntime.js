@@ -1064,11 +1064,13 @@ export async function createVrmPreview(canvas) {
         if (isTorso) { rotation.x += -0.12 * amp * reachPulse; rotation.y += -0.03 * side * amp }
       } else if (directive.action === 'clap') {
         const clapBeat = Math.sin(directive.progress * Math.PI * 4)
+        const clapAccent = Math.abs(clapBeat)
         if (isShoulder) { rotation.z += side * 0.34 * amp; rotation.x += -0.12 * amp }
         if (isUpperArm) { rotation.z += side * 0.72 * amp; rotation.x += -0.34 * amp }
         if (isLowerArm) rotation.x += -0.88 * amp
-        if (isHand) { rotation.y += -side * 0.52 * amp * Math.abs(clapBeat); rotation.z += side * 0.16 * amp * clapBeat }
-        if (isHead || isNeck) rotation.x += 0.06 * amp
+        if (isHand) { rotation.y += -side * 0.52 * amp * clapAccent; rotation.z += side * 0.16 * amp * clapBeat }
+        if (isNeck) { rotation.x += 0.08 * amp + 0.05 * amp * clapAccent; rotation.y += side * 0.03 * amp * clapBeat }
+        if (isHead) { rotation.x += 0.12 * amp + 0.08 * amp * clapAccent; rotation.y += side * 0.05 * amp * clapBeat }
       } else if (directive.action === 'cheer') {
         const cheerPulse = Math.sin(directive.progress * Math.PI * 2)
         if (isShoulder) { rotation.z += side * 0.44 * amp; rotation.x += -0.12 * amp }

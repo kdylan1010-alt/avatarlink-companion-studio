@@ -168,9 +168,13 @@ const server = http.createServer((req, res) => {
     await armButton.waitFor({ state: 'visible', timeout: 30000 });
     for (let i = 0; i < 20; i += 1) {
       await page.waitForTimeout(1000);
-      const sampleReady = await page.evaluate(() => document.body.innerText.includes('Default sample avatar rendered from /avatars/sample.vrm'));
+      const sampleReady = await page.evaluate(() => {
+        const text = document.body.innerText
+        return text.includes('Default sample avatar rendered from /avatars/sample.vrm')
+          || text.includes('Default avatar rendered from /avatars/open-source-avatars-devil.vrm')
+      });
       if (sampleReady) break;
-      if (i === 19) throw new Error('Default sample VRM did not finish loading before arm proof');
+      if (i === 19) throw new Error('Default avatar did not finish loading before arm proof');
     }
     await armButton.click();
     await page.waitForTimeout(900);
