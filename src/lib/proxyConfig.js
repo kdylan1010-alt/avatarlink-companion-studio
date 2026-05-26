@@ -18,6 +18,16 @@ function normalizeUrlPath(pathname = '/') {
   return trimmed || '/'
 }
 
+function isLoopbackHostname(hostname = '') {
+  const lower = String(hostname || '').toLowerCase()
+  return lower === 'localhost' || lower === '127.0.0.1' || lower === '::1'
+}
+
+function looksLikeEndpointPath(pathname = '') {
+  const normalized = normalizeUrlPath(pathname).toLowerCase()
+  return /\/(generate|chat\/completions|responses|health|readyz)$/.test(normalized)
+}
+
 export function validateProxyBase(rawValue, { windowObject = typeof window !== 'undefined' ? window : undefined } = {}) {
   const value = String(rawValue || '').trim()
   if (!value) return { ok: false, code: 'empty', reason: 'Proxy URL is empty' }
@@ -37,8 +47,16 @@ export function validateProxyBase(rawValue, { windowObject = typeof window !== '
     return { ok: false, code: 'protocol', reason: 'Proxy URL must use http or https' }
   }
 
+  if (parsed.protocol === 'http:' && !isLoopbackHostname(parsed.hostname)) {
+    return { ok: false, code: 'public-http', reason: 'Public proxy URLs must use https unless they are loopback localhost' }
+  }
+
   if (hasPlaceholderFragment(parsed.hostname) || hasPlaceholderFragment(parsed.pathname)) {
     return { ok: false, code: 'placeholder', reason: 'Proxy URL host/path still contains placeholder text' }
+  }
+
+  if (looksLikeEndpointPath(parsed.pathname)) {
+    return { ok: false, code: 'endpoint-path', reason: 'Proxy override must point at the proxy base, not a specific endpoint path' }
   }
 
   const normalized = `${parsed.origin}${normalizeUrlPath(parsed.pathname)}`
@@ -100,9 +118,11 @@ export function classifyLiveProxyFailure(errorLike, statusCode) {
   const message = String(errorLike?.message || errorLike || '').trim()
   if (statusCode === 401) return { code: '401', label: 'BLOCKED', reason: '401 Unauthorized from live proxy/provider' }
   if (statusCode === 403) return { code: '403', label: 'BLOCKED', reason: '403 Forbidden from live proxy/provider' }
+  if (statusCode === 404) return { code: '404', label: 'BLOCKED', reason: '404 Not Found from live proxy/provider' }
   if (statusCode === 429) return { code: '429', label: 'BLOCKED', reason: '429 rate limit/quota reached on live proxy/provider' }
-  if (/failed to parse url|invalid url/i.test(message)) return { code: 'parse', label: 'BLOCKED', reason: 'Invalid proxy URL configuration' }
-  if (/abort/i.test(message)) return { code: 'network-timeout', label: 'BLOCKED', reason: 'Live proxy timed out' }
+  if (statusCode >= 500 && statusCode <= 599) return { code: '5xx', label: 'BLOCKED', reason: `Live proxy HTTP ${statusCode}` }
+  if (/failed to parse url|invalid url/i.test(message)) return { code: 'URL_PARSE', label: 'BLOCKED', reason: 'Invalid proxy URL configuration' }
+  if (/abort|timed out|timeout/i.test(message)) return { code: 'timeout', label: 'BLOCKED', reason: 'Live proxy timed out' }
   if (/network|fetch|load failed|failed to fetch|err_connection|econnrefused|enotfound/i.test(message)) return { code: 'network', label: 'BLOCKED', reason: 'Live proxy network failure' }
   if (statusCode) return { code: String(statusCode), label: 'BLOCKED', reason: `Live proxy HTTP ${statusCode}` }
   return { code: 'unknown', label: 'BLOCKED', reason: message || 'Live proxy failure' }
