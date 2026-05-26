@@ -50,7 +50,7 @@ const checks = [
   ['gemini_env_placeholder', envExample.includes('VITE_GEMINI_PROXY_BASE=http://127.0.0.1:8787/api/gemini') && envExample.includes('GEMINI_API_KEY belongs in .env.local only')],
   ['gemini_env_runtime', source.includes('Safe proxy selected:') && source.includes('same-origin or tunnel-forwarded safe proxy') && source.includes('localhost proxy when it opens on the Mac')],
   ['gemini_openai_compat_base', source.includes('http://127.0.0.1:8787/api/gemini')],
-  ['gemini_secret_safe_stub', source.includes('full avatar chain continued with local fallback speech/movement')],
+  ['gemini_secret_safe_stub', source.includes('Full demo BLOCKED — live GPT did not complete, so no success banner or fake fallback reply was shown') && source.includes('Live GPT blocked — waiting for a valid proxy/provider response before speech playback')],
   ['pilot_waitlist_offer', source.includes('Creator pilot waitlist')],
   ['lead_dashboard', source.includes('Recent pilot leads')],
   ['lead_persistence', source.includes('localStorage') && source.includes('Export leads CSV')],

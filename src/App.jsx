@@ -15,6 +15,7 @@ import { createLiveTtsIngestState } from './lib/liveTtsIngest'
 import { buildIngestToVisemePipeline } from './lib/ingestToVisemePipeline'
 import { buildProviderTtsContract } from './lib/providerTtsContract'
 import { buildProviderResponseMap } from './lib/providerResponseMap'
+import { classifyLiveProxyFailure, consumeStoredProxyBase, validateProxyBase } from './lib/proxyConfig'
 
 const PROVIDER_PRESETS = {
   mock: {
@@ -90,21 +91,17 @@ const starterIngest = createLiveTtsIngestState(starterBridge)
 const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge, starterAnalysis)
 const starterContract = buildProviderTtsContract({})
 const starterResponseMap = buildProviderResponseMap(starterContract)
+const SAFE_PROXY_PROVIDERS = new Set(['githubModels', 'gemini'])
 
 
-function readStoredProxyBase(storageKey) {
-  if (typeof window === 'undefined') return ''
-  try {
-    const params = new URLSearchParams(window.location.search)
-    const queryValue = params.get(storageKey)
-    if (queryValue) {
-      window.localStorage.setItem(storageKey, queryValue)
-      return queryValue
-    }
-    return window.localStorage.getItem(storageKey) || ''
-  } catch {
-    return ''
-  }
+const INITIAL_PROXY_CONFIG_NOTICES = {
+  githubModels: null,
+  gemini: null,
+  tts: null,
+}
+
+function setInitialProxyConfigNotice(key, message) {
+  if (message) INITIAL_PROXY_CONFIG_NOTICES[key] = message
 }
 
 function isLocalBrowserHost(hostname = '') {
@@ -118,9 +115,19 @@ function buildSameOriginProxyBase(routePath) {
 }
 
 function resolveSafeProxyBase({ envBase, storageKey, localDefault, publicRoute }) {
-  if (envBase) return envBase
-  const storedBase = readStoredProxyBase(storageKey)
-  if (storedBase) return storedBase
+  if (envBase) {
+    const validatedEnv = validateProxyBase(envBase)
+    if (validatedEnv.ok) {
+      setInitialProxyConfigNotice(storageKey.includes('github') ? 'githubModels' : storageKey.includes('gemini') ? 'gemini' : 'tts', validatedEnv.hadSensitiveParts
+        ? `Sanitized ${storageKey} env base to remove query/hash/auth fragments.`
+        : null)
+      return validatedEnv.normalized
+    }
+    setInitialProxyConfigNotice(storageKey.includes('github') ? 'githubModels' : storageKey.includes('gemini') ? 'gemini' : 'tts', `Blocked invalid ${storageKey} env base (${validatedEnv.code}). Using safe default instead.`)
+  }
+  const storedBase = consumeStoredProxyBase(storageKey)
+  setInitialProxyConfigNotice(storageKey.includes('github') ? 'githubModels' : storageKey.includes('gemini') ? 'gemini' : 'tts', storedBase.error)
+  if (storedBase.value) return storedBase.value
   if (typeof window !== 'undefined' && !isLocalBrowserHost(window.location.hostname)) {
     return buildSameOriginProxyBase(publicRoute)
   }
@@ -342,8 +349,20 @@ async function requestCompanionResponse({
 
   if (modelProvider === 'githubModels' || modelProvider === 'gemini') {
     const proxyLabel = modelProvider === 'githubModels' ? 'GitHub Models' : 'Gemini'
+    const validatedProxy = validateProxyBase(apiBase)
+    if (!validatedProxy.ok) {
+      const blockedFailure = classifyLiveProxyFailure(`Failed to parse URL: ${validatedProxy.reason}`)
+      return {
+        text: '',
+        motionPlan: null,
+        label: `blocked-${modelProvider}:${blockedFailure.code}`,
+        status: `${blockedFailure.label}: ${proxyLabel} proxy config invalid (${blockedFailure.reason}). Live GPT request was rejected before fetch.`,
+        live: false,
+        blocked: true,
+      }
+    }
     try {
-      const response = await fetch(`${apiBase.replace(/\/$/, '')}/generate`, {
+      const response = await fetch(`${validatedProxy.normalized.replace(/\/$/, '')}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, systemPrompt: systemPromptPreview, userPrompt, responseFormat: 'avatar_motion_plan_v1' }),
@@ -357,27 +376,30 @@ async function requestCompanionResponse({
           label: `live-${modelProvider}:${data.model || model}`,
           status: `Live ${proxyLabel} response received through safe local proxy (${data.model || model})`,
           live: true,
+          blocked: false,
         }
       }
-      const fallbackText = data?.text || data?.fallbackText || buildDemoReply(persona, userPrompt)
-      const reason = blocked?.message || data?.message || data?.error || `${proxyLabel} proxy HTTP ${response.status}`
+      const blockedFailure = classifyLiveProxyFailure(blocked?.message || data?.message || data?.error || `${proxyLabel} proxy HTTP ${response.status}`, response.status)
       return {
-        text: fallbackText,
+        text: '',
         motionPlan: data?.motionPlan || null,
-        label: `fallback-${modelProvider}:${data?.code || blocked?.code || response.status}`,
-        status: `${proxyLabel} blocked (${reason}); full avatar chain continued with local fallback speech/movement`,
+        label: `blocked-${modelProvider}:${data?.code || blocked?.code || blockedFailure.code}`,
+        status: `${blockedFailure.label}: ${proxyLabel} live response failed (${blockedFailure.reason}). No fallback reply was presented as live GPT.`,
         live: false,
+        blocked: true,
       }
     } catch (error) {
-      const publicTunnelHint = apiBase.includes('127.0.0.1') || apiBase.includes('localhost')
+      const blockedFailure = classifyLiveProxyFailure(error)
+      const publicTunnelHint = validatedProxy.normalized.includes('127.0.0.1') || validatedProxy.normalized.includes('localhost')
         ? 'The public tunnel cannot reach the Mac-only localhost proxy from your browser.'
         : 'The safe proxy is unreachable from this browser session.'
       return {
-        text: buildDemoReply(persona, userPrompt),
+        text: '',
         motionPlan: null,
-        label: `fallback-${modelProvider}:network-unreachable`,
-        status: `${proxyLabel} safe proxy unavailable (${error.message}). ${publicTunnelHint} Continued with demo fallback so the full demo pipeline still completes.`,
+        label: `blocked-${modelProvider}:${blockedFailure.code}`,
+        status: `${blockedFailure.label}: ${proxyLabel} safe proxy unavailable (${blockedFailure.reason}). ${publicTunnelHint}`,
         live: false,
+        blocked: true,
       }
     }
   }
@@ -424,6 +446,7 @@ export default function App() {
   const [apiBase, setApiBase] = useState(getProviderRuntimeDefaults('githubModels').apiBase)
   const [apiKey, setApiKey] = useState(getProviderRuntimeDefaults('githubModels').apiKey)
   const [model, setModel] = useState(getProviderRuntimeDefaults('githubModels').model)
+  const [proxyConfigError, setProxyConfigError] = useState(() => INITIAL_PROXY_CONFIG_NOTICES.githubModels || null)
   const [uploadedVrmName, setUploadedVrmName] = useState('No avatar loaded yet')
   const [mouthOpen, setMouthOpen] = useState(() => amplitudeToMouthOpen(normalizeAmplitude(starterFrames)))
   const [mouthViseme, setMouthViseme] = useState('aa')
@@ -480,8 +503,24 @@ export default function App() {
     setApiBase(runtimeDefaults.apiBase)
     setApiKey(runtimeDefaults.apiKey)
     setModel(runtimeDefaults.model)
+    setProxyConfigError(INITIAL_PROXY_CONFIG_NOTICES[nextProvider] || null)
     setRuntimeProviderLabel(`${preset.id}:${preset.transport}`)
     setRuntimeStatus(buildProviderSelectedStatus(nextProvider, preset.label, hasLocalKey))
+  }
+
+  const handleApiBaseChange = (nextValue) => {
+    if (!SAFE_PROXY_PROVIDERS.has(modelProvider)) {
+      setApiBase(nextValue)
+      setProxyConfigError(null)
+      return
+    }
+    const validated = validateProxyBase(nextValue)
+    if (!validated.ok) {
+      setProxyConfigError(`Blocked invalid ${modelProvider} proxy override (${validated.code}). Keeping the last safe proxy base.`)
+      return
+    }
+    setApiBase(validated.normalized)
+    setProxyConfigError(validated.hadSensitiveParts ? 'Sanitized proxy override to remove query/hash/auth fragments before use.' : null)
   }
 
   const handleVoiceProviderChange = (nextVoiceProvider) => {
@@ -784,8 +823,14 @@ export default function App() {
       const providerLabel = `full-demo:${providerResult.label}`
       setRuntimeStatus(`Full demo pipeline: ${providerResult.status}`)
 
-      setAssistantResponse(responseText)
+      setAssistantResponse(responseText || (providerResult.blocked ? 'Live GPT blocked — no assistant reply was shown because the configured safe proxy failed validation or returned a live-provider error.' : ''))
       setRuntimeProviderLabel(providerLabel)
+      if (providerResult.blocked) {
+        setMovementProofStatus('Full demo BLOCKED — live GPT did not complete, so no success banner or fake fallback reply was shown')
+        setPlaybackStatus('Live GPT blocked — waiting for a valid proxy/provider response before speech playback')
+        setAvatarMood('idle')
+        return
+      }
       await speakWithFallback(responseText, {
         motionPlan: providerResult.motionPlan,
         finalMovementProofStatus: 'Full demo complete — VRM + voice + provider/mock + chat + speech + mouth movement chain visible',
@@ -820,8 +865,13 @@ export default function App() {
       const providerLabel = providerResult.label
       setRuntimeStatus(providerResult.status)
 
-      setAssistantResponse(responseText)
+      setAssistantResponse(responseText || (providerResult.blocked ? 'Live GPT blocked — no assistant reply was shown because the live proxy failed validation or returned an upstream error.' : ''))
       setRuntimeProviderLabel(providerLabel)
+      if (providerResult.blocked) {
+        setPlaybackStatus('Live GPT blocked — no speech playback attempted')
+        setAvatarMood('idle')
+        return
+      }
       await speakWithFallback(responseText, { motionPlan: providerResult.motionPlan })
     } catch (error) {
       setRuntimeStatus(`Runtime call failed: ${error.message}`)
@@ -944,9 +994,10 @@ export default function App() {
             apiBase={apiBase}
             apiKey={apiKey}
             model={model}
-            onApiBase={setApiBase}
+            onApiBase={handleApiBaseChange}
             onApiKey={setApiKey}
             onModel={setModel}
+            proxyConfigError={proxyConfigError}
             systemPromptPreview={systemPromptPreview}
             userPrompt={userPrompt}
             onUserPrompt={setUserPrompt}

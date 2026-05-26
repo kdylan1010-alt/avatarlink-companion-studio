@@ -22,6 +22,7 @@ export function ChatWorkbench({
   onApiBase,
   onApiKey,
   onModel,
+  proxyConfigError,
   systemPromptPreview,
   userPrompt,
   onUserPrompt,
@@ -111,6 +112,11 @@ export function ChatWorkbench({
   secretPath: '${isSafeProxy ? '.env.local server-side only' : 'browser BYOK only if entered'}',
   healthCheck: '${proxyHealthPath}'
 }`}</pre>
+            {proxyConfigError && (
+              <div className="status-chip" role="alert">
+                Proxy/API config blocked: {proxyConfigError}
+              </div>
+            )}
           </div>
           <div className="preview-card">
             <p className="mono">System prompt preview</p>
