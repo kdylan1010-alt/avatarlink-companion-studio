@@ -272,7 +272,7 @@ function finalizeArmMotionState(state, armRig) {
 const MOUTH_MORPH_REGEX = /(mouth|jaw|lip|viseme|phoneme|aa|ah|aah|ih|ee|oh|ou|smile|frown|open)/i
 const JAW_BONE_REGEX = /(jaw|chin|mandible)/i
 const HEAD_BONE_REGEX = /(^|[^a-z])(head|neck)([^a-z]|$)/i
-const HAIR_BONE_REGEX = /(hair|bang|fringe|sideburn|ponytail|braid|twin|tail|ahoge|antenna|ribbon|accessory|skirt|cloth)/i
+const HAIR_BONE_REGEX = /(hair|wig|bang|fringe|sideburn|ponytail|braid|twin|tail|ahoge|antenna|ribbon|accessory|skirt|cloth)/i
 const NON_VRM_VISEME_SLOT_RULES = {
   aa: [/(^|[^a-z])ae[_-]?aa([^a-z]|$)/i, /mouthopen/i, /shout/i],
   oh: [/(^|[^a-z])ao[_-]?a([^a-z]|$)/i, /(^|[^a-z])uh[_-]?oo([^a-z]|$)/i, /(^|[^a-z])uw[_-]?u([^a-z]|$)/i],
@@ -483,10 +483,32 @@ function captureGenericBodyPartRig(diagnostics) {
 }
 
 
+function isDescendantOf(node, ancestor) {
+  let current = node?.parent || null
+  while (current) {
+    if (current === ancestor) return true
+    current = current.parent || null
+  }
+  return false
+}
+
 function captureHairRig(root, springBoneManager = null) {
   const byUuid = new Map()
+  const headCandidates = []
+  root?.traverse?.((node) => {
+    if (node?.isBone && HEAD_BONE_REGEX.test(node.name || '')) headCandidates.push(node)
+  })
+  const headAnchor = headCandidates.find((bone) => /head/i.test(bone.name || '')) || headCandidates[0] || null
+  const headBaseWorldPosition = new THREE.Vector3()
+  const headBaseWorldQuaternion = new THREE.Quaternion()
+  if (headAnchor) {
+    headAnchor.updateWorldMatrix?.(true, false)
+    headAnchor.getWorldPosition(headBaseWorldPosition)
+    headAnchor.getWorldQuaternion(headBaseWorldQuaternion)
+  }
   const addBone = (node, source = 'name') => {
-    if (!node?.isBone) return
+    if (!node || (!node.isBone && !node.isMesh && !node.isSkinnedMesh)) return
+    if (source === 'spring' && !node.isBone) return
     const name = String(node.name || '')
     if (source === 'name' && !HAIR_BONE_REGEX.test(name)) return
     // Never animate the avatar/root/hips/clothing as hair. Only real hair/appendage secondary bones are accepted.
@@ -494,13 +516,28 @@ function captureHairRig(root, springBoneManager = null) {
     if (/(hips|root|spine|chest|neck|head|shoulder|arm|hand|leg|foot)/i.test(name) && source !== 'spring') return
     if (source === 'spring' && !HAIR_BONE_REGEX.test(name) && !/hairjoint/i.test(name)) return
     if (byUuid.has(node.uuid)) return
+    const baseWorldPosition = new THREE.Vector3()
+    const baseWorldQuaternion = new THREE.Quaternion()
+    node.updateWorldMatrix?.(true, false)
+    node.getWorldPosition(baseWorldPosition)
+    node.getWorldQuaternion(baseWorldQuaternion)
+    const followsHeadByHierarchy = Boolean(headAnchor && isDescendantOf(node, headAnchor))
     byUuid.set(node.uuid, {
       label: name || `${source}HairBone`,
       source,
       bone: node,
       baseQuaternion: node.quaternion.clone(),
       basePosition: node.position.clone(),
+      baseWorldPosition,
+      baseWorldQuaternion,
+      headAnchor,
+      headBaseWorldPosition: headBaseWorldPosition.clone(),
+      headBaseWorldQuaternion: headBaseWorldQuaternion.clone(),
+      followsHeadByHierarchy,
       quaternion: new THREE.Quaternion(),
+      headDeltaQuaternion: new THREE.Quaternion(),
+      targetWorldQuaternion: new THREE.Quaternion(),
+      parentWorldQuaternion: new THREE.Quaternion(),
       euler: new THREE.Euler(),
       phase: (byUuid.size + 1) * 0.71,
       amp: {
@@ -1241,7 +1278,27 @@ export async function createVrmPreview(canvas) {
       entry.euler.set(rotation.x, rotation.y, rotation.z)
       entry.quaternion.setFromEuler(entry.euler)
       entry.bone.position.copy(entry.basePosition)
-      entry.bone.quaternion.copy(entry.baseQuaternion).multiply(entry.quaternion)
+      if (entry.headAnchor && !entry.followsHeadByHierarchy) {
+        const currentHeadWorldPosition = new THREE.Vector3()
+        const currentHeadWorldQuaternion = new THREE.Quaternion()
+        entry.headAnchor.updateWorldMatrix?.(true, false)
+        entry.headAnchor.getWorldPosition(currentHeadWorldPosition)
+        entry.headAnchor.getWorldQuaternion(currentHeadWorldQuaternion)
+        entry.headDeltaQuaternion.copy(currentHeadWorldQuaternion).multiply(entry.headBaseWorldQuaternion.clone().invert())
+        const baseOffset = entry.baseWorldPosition.clone().sub(entry.headBaseWorldPosition).applyQuaternion(entry.headDeltaQuaternion)
+        const targetWorldPosition = currentHeadWorldPosition.clone().add(baseOffset)
+        entry.bone.parent?.worldToLocal?.(targetWorldPosition)
+        entry.bone.position.copy(targetWorldPosition)
+        entry.targetWorldQuaternion.copy(entry.headDeltaQuaternion).multiply(entry.baseWorldQuaternion).multiply(entry.quaternion)
+        if (entry.bone.parent) {
+          entry.bone.parent.getWorldQuaternion(entry.parentWorldQuaternion).invert()
+          entry.bone.quaternion.copy(entry.parentWorldQuaternion).multiply(entry.targetWorldQuaternion)
+        } else {
+          entry.bone.quaternion.copy(entry.targetWorldQuaternion)
+        }
+      } else {
+        entry.bone.quaternion.copy(entry.baseQuaternion).multiply(entry.quaternion)
+      }
       rememberProceduralPeak(`hair:${entry.label}`, rotation)
     }
     currentAvatarScene?.updateMatrixWorld?.(true)
@@ -2419,13 +2476,17 @@ export async function createVrmPreview(canvas) {
         gazeTarget.position.copy(smoothedGazeTarget)
       }
       applyVrmProceduralBodyMotion()
-      applyHairMotion()
-      applyEyeBoneMotion()
       applyArmMotion()
       updateSmoothedMouth(delta)
       applyExpressionState()
       applyNonVrmVisemeState()
       currentVrm.update(delta)
+      // Apply secondary hair/accessory and eye motion after VRM.update/arm motion so
+      // spring-bone managers and late head/arm transforms cannot overwrite it.
+      // This keeps hair attached to/following the final head pose while still adding
+      // its own non-root secondary sway.
+      applyHairMotion()
+      applyEyeBoneMotion()
       vrmUpdated = true
     } else if (currentGenericScene) {
       updateSmoothedMouth(delta)
@@ -2434,9 +2495,12 @@ export async function createVrmPreview(canvas) {
       // Body motion proof rotates detected skeleton bones independently and leaves the root planted.
       currentGenericScene.rotation.set(0, 0, 0)
       applyGenericProceduralBodyMotion()
+      applyBodyPartMotion()
+      // Generic/Sketchfab hair may not be parented cleanly under the detected head bone.
+      // Run secondary hair after all head/body directives so the rendered hair state is
+      // coupled to the final head pose instead of the previous frame's pose.
       applyHairMotion()
       applyEyeBoneMotion()
-      applyBodyPartMotion()
     }
     recordRenderLoopSample({ delta, mixerUpdated, vrmUpdated })
     renderer.render(scene, camera)
@@ -2596,11 +2660,40 @@ export async function createVrmPreview(canvas) {
       return motionPlanState.snapshot
     },
     getHairMotionSnapshot() {
+      const followSamples = hairRig.bones.slice(0, 12).map((entry) => {
+        const worldPosition = new THREE.Vector3()
+        entry.bone.updateWorldMatrix?.(true, false)
+        entry.bone.getWorldPosition(worldPosition)
+        let headFollowError = null
+        if (entry.headAnchor) {
+          const currentHeadWorldPosition = new THREE.Vector3()
+          const currentHeadWorldQuaternion = new THREE.Quaternion()
+          entry.headAnchor.updateWorldMatrix?.(true, false)
+          entry.headAnchor.getWorldPosition(currentHeadWorldPosition)
+          entry.headAnchor.getWorldQuaternion(currentHeadWorldQuaternion)
+          const headDelta = currentHeadWorldQuaternion.multiply(entry.headBaseWorldQuaternion.clone().invert())
+          const expected = currentHeadWorldPosition.clone().add(entry.baseWorldPosition.clone().sub(entry.headBaseWorldPosition).applyQuaternion(headDelta))
+          headFollowError = worldPosition.distanceTo(expected)
+        }
+        return {
+          label: entry.label,
+          source: entry.source,
+          followsHeadByHierarchy: entry.followsHeadByHierarchy,
+          hasHeadAnchor: Boolean(entry.headAnchor),
+          headFollowError: Number.isFinite(headFollowError) ? Number(headFollowError.toFixed(6)) : headFollowError,
+          worldPosition: worldPosition.toArray().map((value) => Number(value.toFixed(5))),
+        }
+      })
+      const headFollowErrors = followSamples.map((sample) => sample.headFollowError).filter((value) => Number.isFinite(value))
       return {
         availableHairBones: hairRig.availableHairBones || [],
         hairBoneCount: hairRig.bones.length,
+        headFollowerHairBoneCount: hairRig.bones.filter((entry) => entry.headAnchor && !entry.followsHeadByHierarchy).length,
+        hierarchyFollowerHairBoneCount: hairRig.bones.filter((entry) => entry.followsHeadByHierarchy).length,
+        maxHeadFollowError: headFollowErrors.length ? Number(Math.max(...headFollowErrors).toFixed(6)) : null,
         rootMotionGuard: 'root-transform-stays-fixed',
         proceduralPeakDegrees: Object.fromEntries(Object.entries(proceduralPartPeak).filter(([key]) => key.startsWith('hair:'))),
+        followSamples,
       }
     },
     runArmMotionProof(options = {}) {

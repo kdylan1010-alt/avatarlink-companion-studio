@@ -6,6 +6,46 @@ const SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/sample.vrm`
 const FAST_SAMPLE_PATH = `${import.meta.env.BASE_URL}avatars/open-source-avatars-devil.vrm`
 const DEFAULT_AVATAR_PATH = FAST_SAMPLE_PATH
 const LOAD_TIMEOUT_MS = 12000
+const ROUTED_MODEL_PARAM_KEYS = ['model', 'avatar', 'avatarModel']
+const ROUTED_MODEL_EXTENSIONS = ['.vrm', '.glb', '.gltf']
+
+function normalizeHostedAvatarPath(pathname = '') {
+  const base = import.meta.env.BASE_URL || '/'
+  const cleanBase = base.endsWith('/') ? base : `${base}/`
+  let normalized = String(pathname || '').trim()
+  if (!normalized) return null
+  normalized = normalized.replace(/^\/+/, '')
+  if (normalized.startsWith(cleanBase.replace(/^\/+/, ''))) {
+    normalized = normalized.slice(cleanBase.replace(/^\/+/, '').length)
+  }
+  if (!normalized.startsWith('avatars/')) normalized = `avatars/${normalized}`
+  if (!ROUTED_MODEL_EXTENSIONS.some((ext) => normalized.toLowerCase().endsWith(ext))) return null
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.some((part) => part === '..' || part.includes('\\'))) return null
+  return `${cleanBase}${parts.join('/')}`
+}
+
+function resolveRoutedModelFromUrl() {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const rawValue = ROUTED_MODEL_PARAM_KEYS.map((key) => params.get(key)).find(Boolean)
+  if (!rawValue) return null
+  let candidate = rawValue.trim()
+  try {
+    const parsed = new URL(candidate, window.location.href)
+    if (parsed.origin !== window.location.origin) return null
+    candidate = parsed.pathname
+  } catch {
+    // Keep raw relative candidate.
+  }
+  const url = normalizeHostedAvatarPath(candidate)
+  if (!url) return null
+  return {
+    url,
+    displayName: url.split('/').pop() || 'routed-avatar',
+    publicPath: url.replace(import.meta.env.BASE_URL, '/'),
+  }
+}
 
 async function withLoadTimeout(promise, label) {
   let timer
@@ -64,6 +104,27 @@ export function VrmStudioPanel({
       runtime.setMouthOpen(mouthOpen, 'aa')
       runtime.setAvatarMood(avatarMood)
       try {
+        const routedModel = resolveRoutedModelFromUrl()
+        if (routedModel) {
+          setRenderStatus(`Loading routed model viewer link: ${routedModel.publicPath}…`)
+          const result = await withLoadTimeout(runtime.loadUrl(routedModel.url), 'Routed model load')
+          onUploadName(routedModel.displayName)
+          if (mounted) {
+            setAssetKind(result?.format || 'avatar')
+            setMeta(`${result?.avatarName || routedModel.displayName} • ${result?.format || 'avatar'} ${result?.specVersion || 'unknown'} • bones ${result?.humanoidBoneCount ?? 0}`)
+            setRenderStatus(`Routed model rendered in-browser from viewer link: ${routedModel.publicPath}`)
+            const initialSnapshot = runtime.getArmMotionSnapshot?.()
+            if (initialSnapshot?.availableBoneLabels?.length) {
+              setArmProofSummary(`Ready bones: ${initialSnapshot.availableBoneLabels.join(', ')}`)
+            }
+            const bodySnapshot = runtime.getBodyPartMotionSnapshot?.()
+            if (bodySnapshot?.availableParts?.length) {
+              setBodyPartProofSummary(`Detected body parts: ${bodySnapshot.availableParts.join(', ')}. Root transform stays fixed.`)
+            }
+          }
+          return
+        }
+
         setRenderStatus('Loading default avatar…')
         let result
         let loadedPath = DEFAULT_AVATAR_PATH
@@ -318,6 +379,8 @@ export function VrmStudioPanel({
           <strong>{uploadedVrmName}</strong>
           <p className="mono">Default sample path</p>
           <p>{SAMPLE_PATH}</p>
+          <p className="mono">Routed model viewer link support</p>
+          <p>Use ?model=avatars/valid-white-f1-casual.glb to open the full app with that hosted model rendered in-browser instead of linking directly to the raw .glb download.</p>
           <p className="mono">Mouth-open signal</p>
           <p>{mouthOpen.toFixed(2)}</p>
           <p className="mono">Render status</p>
