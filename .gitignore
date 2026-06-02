@@ -10,3 +10,6 @@ dist/
 artifacts/*
 !artifacts/avatarlink-browser-full-chain-proof.md
 !artifacts/avatarlink-browser-proof-e2e.json
+
+logs/
+backups/

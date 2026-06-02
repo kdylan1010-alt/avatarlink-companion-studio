@@ -12,12 +12,13 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 APP_ROOT="$RESOURCES_DIR/app"
 BIN_DIR="$APP_ROOT/bin"
+DOCS_DIR="$APP_ROOT/docs"
 DMG_PATH="$ARTIFACTS_DIR/avatarlink-companion-studio-mac.dmg"
 README_PATH="$STAGE_DIR/README.txt"
 STATUS_DOC="$ROOT/docs/MAC_DMG_PACKAGING.md"
 
 rm -rf "$STAGE_DIR"
-mkdir -p "$MACOS_DIR" "$APP_ROOT" "$BIN_DIR" "$ARTIFACTS_DIR"
+mkdir -p "$MACOS_DIR" "$APP_ROOT" "$BIN_DIR" "$DOCS_DIR" "$ARTIFACTS_DIR"
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -73,6 +74,9 @@ cp "$ROOT/scripts/local-app-launcher.mjs" "$APP_ROOT/scripts/"
 cp "$ROOT/package.json" "$APP_ROOT/"
 [[ -f "$ROOT/.env.example" ]] && cp "$ROOT/.env.example" "$APP_ROOT/" || true
 [[ -f "$STATUS_DOC" ]] && cp "$STATUS_DOC" "$APP_ROOT/" || true
+for doc in MODEL_PROVIDERS.md OAUTH_ROUTE.md LLM_LANES.md OPERATIONS.md; do
+  [[ -f "$ROOT/docs/$doc" ]] && cp "$ROOT/docs/$doc" "$DOCS_DIR/" || true
+done
 cp /usr/local/bin/node "$BIN_DIR/node"
 chmod +x "$BIN_DIR/node"
 
@@ -87,11 +91,16 @@ How to use:
 2. Launch it.
 3. The app starts a local static server and keeps the AI safe proxy on port 8787.
 4. It opens the browser to the local app URL automatically.
+5. To enable live providers on another Mac, copy .env.example from inside the app bundle to:
+   ~/Library/Application Support/AvatarLink Companion Studio/.env.local
+   Then add only the keys/routes you want (for example GITHUB_TOKEN, PROVIDER_OAUTH_*,
+   DEEPSEEK_API_KEY, GEMINI_API_KEY, VITE_OPENROUTER_API_KEY, VITE_LOCAL_ROUTER_API_BASE,
+   VITE_LOCAL_ROUTER_API_KEY, VITE_OLLAMA_API_BASE, VITE_OPENAI_API_KEY) and relaunch.
 
 Notes:
-- Secrets are not bundled. For live GitHub Models/TTS proxy access on a new Mac, add a suitable .env.local next to the bundled app resources or configure the original project checkout.
+- Secrets are not bundled. The launcher reads provider config from the packaged .env.example only as placeholders and from a real local file at ~/Library/Application Support/AvatarLink Companion Studio/.env.local when you provide one.
 - Launcher log: ~/Library/Logs/AvatarLink Companion Studio/launcher.log
-- Packaging doc copied into the bundle resources when available.
+- Provider docs are bundled in Contents/Resources/app/docs/.
 EOF
 ln -s /Applications "$STAGE_DIR/Applications"
 

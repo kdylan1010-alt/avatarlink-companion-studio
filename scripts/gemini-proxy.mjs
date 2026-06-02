@@ -1,6 +1,8 @@
 import http from 'node:http'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
@@ -8,23 +10,141 @@ const PORT = Number(process.env.AVATARLINK_PROXY_PORT || process.env.GEMINI_PROX
 const PROJECT_ROOT = process.cwd()
 const execFileAsync = promisify(execFile)
 const HERMES_BIN = process.env.HERMES_BIN || '/Users/a1111/.local/bin/hermes'
-const ARTIFACTS_DIR = path.join(PROJECT_ROOT, 'artifacts', 'tts')
+const USER_DATA_DIR = process.env.AVATARLINK_USER_DATA_DIR || path.join(os.homedir(), 'Library', 'Application Support', 'AvatarLink Companion Studio')
+const ARTIFACTS_DIR = process.env.AVATARLINK_ARTIFACTS_DIR || path.join(USER_DATA_DIR, 'artifacts', 'tts')
 
 function loadLocalEnv() {
-  const envPath = path.join(PROJECT_ROOT, '.env.local')
-  if (!fs.existsSync(envPath)) return
-  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue
-    const [key, ...rest] = trimmed.split('=')
-    if (!process.env[key]) process.env[key] = rest.join('=').trim()
+  const candidates = [
+    process.env.AVATARLINK_ENV_PATH,
+    path.join(PROJECT_ROOT, '.env.local'),
+  ].filter(Boolean)
+  for (const envPath of candidates) {
+    if (!fs.existsSync(envPath)) continue
+    for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue
+      const [key, ...rest] = trimmed.split('=')
+      if (!process.env[key]) process.env[key] = rest.join('=').trim()
+    }
+    return
   }
 }
 
 loadLocalEnv()
 
+// --- Provider OAuth connector (server-side only) ---------------------------
+// Real, env-configured OAuth that obtains an LLM provider token used by the
+// avatar generate lane (motion cues + spoken reply, which TTS then voices).
+// The client secret and the obtained token live server-side only and are never
+// serialized to the browser. Secrets belong in .env.local; .env.example holds
+// placeholders. This connector targets the GitHub Models LLM lane below.
+const OAUTH = {
+  authorizeUrl: process.env.PROVIDER_OAUTH_AUTHORIZE_URL || '',
+  tokenUrl: process.env.PROVIDER_OAUTH_TOKEN_URL || '',
+  clientId: process.env.PROVIDER_OAUTH_CLIENT_ID || '',
+  clientSecret: process.env.PROVIDER_OAUTH_CLIENT_SECRET || '',
+  scopes: process.env.PROVIDER_OAUTH_SCOPES || 'openid profile',
+  callbackUrl: process.env.PROVIDER_OAUTH_CALLBACK_URL || `http://127.0.0.1:${PORT}/oauth/callback`,
+  redirectAfter: process.env.PROVIDER_OAUTH_REDIRECT_AFTER || '',
+}
+
+function oauthMissingConfig() {
+  const missing = []
+  if (!OAUTH.authorizeUrl) missing.push('PROVIDER_OAUTH_AUTHORIZE_URL')
+  if (!OAUTH.tokenUrl) missing.push('PROVIDER_OAUTH_TOKEN_URL')
+  if (!OAUTH.clientId) missing.push('PROVIDER_OAUTH_CLIENT_ID')
+  if (!OAUTH.clientSecret) missing.push('PROVIDER_OAUTH_CLIENT_SECRET')
+  return missing
+}
+
+// Short-lived CSRF state values for in-flight authorize requests.
+const oauthPendingStates = new Map()
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000
+// Single-tenant token store for this Mac-local proxy. Never sent to the browser.
+let oauthToken = null // { accessToken, refreshToken, scope, obtainedAt, expiresAt }
+
+function rememberOauthState(state) {
+  const now = Date.now()
+  for (const [key, ts] of oauthPendingStates) {
+    if (now - ts > OAUTH_STATE_TTL_MS) oauthPendingStates.delete(key)
+  }
+  oauthPendingStates.set(state, now)
+}
+
+function consumeOauthState(state) {
+  if (!state || !oauthPendingStates.has(state)) return false
+  oauthPendingStates.delete(state)
+  return true
+}
+
+function oauthAccessToken() {
+  if (!oauthToken?.accessToken) return ''
+  if (oauthToken.expiresAt && Date.now() >= oauthToken.expiresAt) return ''
+  return oauthToken.accessToken
+}
+
+function oauthStatus() {
+  const token = oauthAccessToken()
+  return {
+    configured: oauthMissingConfig().length === 0,
+    connected: Boolean(token),
+    scope: oauthToken?.scope || OAUTH.scopes,
+    expiresInSec: oauthToken?.expiresAt ? Math.max(0, Math.round((oauthToken.expiresAt - Date.now()) / 1000)) : null,
+  }
+}
+
+async function exchangeOauthCode(code) {
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code,
+    client_id: OAUTH.clientId,
+    client_secret: OAUTH.clientSecret,
+    redirect_uri: OAUTH.callbackUrl,
+  })
+  const response = await fetch(OAUTH.tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body,
+  })
+  const text = await response.text()
+  if (!response.ok) {
+    return { ok: false, status: response.status, message: redactSecretText(text).slice(0, 500) }
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    parsed = Object.fromEntries(new URLSearchParams(text)) // some providers return form-encoded tokens
+  }
+  if (parsed.error) {
+    return { ok: false, status: 400, message: redactSecretText(`${parsed.error}: ${parsed.error_description || ''}`).slice(0, 300) }
+  }
+  const accessToken = parsed.access_token
+  if (!accessToken) {
+    return { ok: false, status: 502, message: 'Token endpoint returned no access_token' }
+  }
+  const expiresInSec = Number(parsed.expires_in)
+  oauthToken = {
+    accessToken,
+    refreshToken: parsed.refresh_token || '',
+    scope: parsed.scope || OAUTH.scopes,
+    obtainedAt: Date.now(),
+    expiresAt: Number.isFinite(expiresInSec) && expiresInSec > 0 ? Date.now() + expiresInSec * 1000 : null,
+  }
+  return { ok: true }
+}
+// ---------------------------------------------------------------------------
+
 function sleepMs(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function redirectResponse(res, location) {
+  res.writeHead(302, {
+    Location: location,
+    'Access-Control-Allow-Origin': '*',
+  })
+  res.end()
 }
 
 function jsonResponse(res, status, payload) {
@@ -421,9 +541,9 @@ function classifyGithubModelsError(status, bodyText) {
 }
 
 async function callGithubModels({ model, systemPrompt, userPrompt }) {
-  const key = process.env.GITHUB_TOKEN
+  const key = oauthAccessToken() || process.env.GITHUB_TOKEN
   if (!key) {
-    return { ok: false, status: 500, code: 'MISSING_GITHUB_TOKEN', message: 'GITHUB_TOKEN is missing from .env.local' }
+    return { ok: false, status: 500, code: 'MISSING_GITHUB_TOKEN', message: 'No LLM credential available: connect a provider via /oauth/start or set GITHUB_TOKEN in .env.local' }
   }
   const selectedModel = model || process.env.GITHUB_MODELS_MODEL || 'openai/gpt-4.1-mini'
   const response = await fetch('https://models.github.ai/inference/chat/completions', {
@@ -437,16 +557,7 @@ async function callGithubModels({ model, systemPrompt, userPrompt }) {
       messages: [
         {
           role: 'system',
-          content: `${systemPrompt || 'You are an AvatarLink companion.'}
-You control an upper-body avatar. Return STRICT JSON only, no markdown, matching this exact shape:
-{"reply":"short spoken reply only","emotion":"happy|playful|curious|calm","movement_cues":[{"time":0,"part":"rightHand","action":"wave","intensity":1.2,"duration":1200}],"speech_cues":{"pace":"normal","emphasis":["optional short phrase"]}}
-Rules:
-- movement_cues must be concrete motions that can be animated on bones, never vague intensity buckets.
-- Allowed actions: wave, bow, peek-around, nod, point, reach, clap, cheer, think, surprised-jump, beckon, hand-on-heart, lean, raise, gesture, look, hug, kiss, blush, shake-head, thumbs-up, shrug.
-- Allowed parts: head, body, arms, leftHand, rightHand, eyes.
-- For greetings like wave/hello, include an actual wave cue on leftHand or rightHand plus any needed arm/head/body support cues.
-- For hug, use both hands/arms plus body support. For kiss, use head/body lean support. For blush, pair shy head motion with at least one hand cue. For shake-head, animate the head/neck rather than whole-body sway. For thumbs-up, include rightHand plus arm support. For shrug, include shoulder/arm lift with a small head reaction. For reach, extend a hand/arm forward. For clap, drive both hands together. For cheer, lift both arms with head/body excitement. For think, place one hand near the face with a head tilt. For surprised-jump, create an upper-body startle without moving the root. For beckon, use a repeated inward hand invitation gesture. For hand-on-heart, place one hand to chest with gentle torso/head sincerity support.
-- Keep reply natural and brief. No canned 'Archivist Echo' or 'I heard'.`
+          content: avatarMotionSystemPrompt(systemPrompt),
         },
         { role: 'user', content: userPrompt || 'Hello' },
       ],
@@ -460,19 +571,183 @@ Rules:
   }
   const parsed = JSON.parse(bodyText)
   const rawText = parsed?.choices?.[0]?.message?.content?.trim()
+  return buildAvatarResult(rawText, userPrompt, selectedModel, 'GitHub Models returned an empty response.')
+}
+
+
+// --- Shared avatar motion/voice LLM contract ------------------------------
+// One strict-JSON system prompt + one result builder shared by every LLM lane
+// (github-models, gpt, qwen, deepseek, claude, gemini) so motion cues + the
+// spoken reply come out identically regardless of provider.
+function avatarMotionSystemPrompt(systemPrompt) {
+  return `${systemPrompt || 'You are an AvatarLink companion.'}
+You control an upper-body avatar. Return STRICT JSON only, no markdown, matching this exact shape:
+{"reply":"short spoken reply only","emotion":"happy|playful|curious|calm","movement_cues":[{"time":0,"part":"rightHand","action":"wave","intensity":1.2,"duration":1200}],"speech_cues":{"pace":"normal","emphasis":["optional short phrase"]}}
+Rules:
+- movement_cues must be concrete motions that can be animated on bones, never vague intensity buckets.
+- Allowed actions: wave, bow, peek-around, nod, point, reach, clap, cheer, think, surprised-jump, beckon, hand-on-heart, lean, raise, gesture, look, hug, kiss, blush, shake-head, thumbs-up, shrug.
+- Allowed parts: head, body, arms, leftHand, rightHand, eyes.
+- For greetings like wave/hello, include an actual wave cue on leftHand or rightHand plus any needed arm/head/body support cues.
+- For hug, use both hands/arms plus body support. For kiss, use head/body lean support. For blush, pair shy head motion with at least one hand cue. For shake-head, animate the head/neck rather than whole-body sway. For thumbs-up, include rightHand plus arm support. For shrug, include shoulder/arm lift with a small head reaction. For reach, extend a hand/arm forward. For clap, drive both hands together. For cheer, lift both arms with head/body excitement. For think, place one hand near the face with a head tilt. For surprised-jump, create an upper-body startle without moving the root. For beckon, use a repeated inward hand invitation gesture. For hand-on-heart, place one hand to chest with gentle torso/head sincerity support.
+- Keep reply natural and brief. No canned 'Archivist Echo' or 'I heard'.`
+}
+
+function buildAvatarResult(rawText, userPrompt, model, emptyLabel) {
   const motionParsed = parseAvatarMotionPlanResponse(rawText || '', userPrompt || '')
+  const text = motionParsed.text || emptyLabel
   return {
     ok: true,
-    text: motionParsed.text || 'GitHub Models returned an empty response.',
-    reply: motionParsed.schema?.reply || motionParsed.text || 'GitHub Models returned an empty response.',
+    text,
+    reply: motionParsed.schema?.reply || text,
     emotion: motionParsed.schema?.emotion || 'calm',
     movement_cues: motionParsed.schema?.movement_cues || [],
     speech_cues: motionParsed.schema?.speech_cues || { pace: 'normal', emphasis: [] },
     motionPlan: motionParsed.motionPlan,
-    model: selectedModel,
+    model,
   }
 }
 
+function classifyOpenAICompatibleError(label, status, bodyText) {
+  let message = redactSecretText(bodyText).slice(0, 500)
+  try {
+    const parsed = JSON.parse(bodyText)
+    message = redactSecretText(parsed?.error?.message || parsed?.message || bodyText).slice(0, 500)
+  } catch {}
+  if (status === 401) return { code: `${label}_UNAUTHORIZED`, message }
+  if (status === 403) return { code: `${label}_FORBIDDEN`, message }
+  if (status === 404) return { code: `${label}_MODEL_NOT_FOUND`, message }
+  if (status === 429) return { code: `${label}_RATE_LIMITED`, message }
+  return { code: `${label}_HTTP_${status}`, message }
+}
+
+// Generic OpenAI-compatible /chat/completions caller (GPT, Qwen, DeepSeek).
+async function callOpenAICompatible({ label, endpoint, apiKey, apiKeyName, model, defaultModel, systemPrompt, userPrompt }) {
+  if (!apiKey) {
+    return { ok: false, status: 500, code: `MISSING_${apiKeyName}`, message: `${apiKeyName} is missing from .env.local` }
+  }
+  const selectedModel = model || defaultModel
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: selectedModel,
+      messages: [
+        { role: 'system', content: avatarMotionSystemPrompt(systemPrompt) },
+        { role: 'user', content: userPrompt || 'Hello' },
+      ],
+      temperature: 0.45,
+      max_tokens: 520,
+    }),
+  })
+  const bodyText = await response.text()
+  if (!response.ok) {
+    return { ok: false, status: response.status, ...classifyOpenAICompatibleError(label, response.status, bodyText) }
+  }
+  const parsed = JSON.parse(bodyText)
+  const rawText = parsed?.choices?.[0]?.message?.content?.trim()
+  return buildAvatarResult(rawText, userPrompt, selectedModel, `${label} returned an empty response.`)
+}
+
+function callGpt({ model, systemPrompt, userPrompt }) {
+  return callOpenAICompatible({
+    label: 'GPT',
+    endpoint: `${(process.env.OPENAI_API_BASE || 'https://api.openai.com/v1').replace(/\/$/, '')}/chat/completions`,
+    apiKey: process.env.OPENAI_API_KEY,
+    apiKeyName: 'OPENAI_API_KEY',
+    model,
+    defaultModel: process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini',
+    systemPrompt,
+    userPrompt,
+  })
+}
+
+function callQwen({ model, systemPrompt, userPrompt }) {
+  return callOpenAICompatible({
+    label: 'QWEN',
+    endpoint: `${(process.env.QWEN_API_BASE || 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1').replace(/\/$/, '')}/chat/completions`,
+    apiKey: process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY,
+    apiKeyName: 'QWEN_API_KEY',
+    model,
+    defaultModel: process.env.QWEN_MODEL || 'qwen-plus',
+    systemPrompt,
+    userPrompt,
+  })
+}
+
+function callDeepseek({ model, systemPrompt, userPrompt }) {
+  return callOpenAICompatible({
+    label: 'DEEPSEEK',
+    endpoint: `${(process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com/v1').replace(/\/$/, '')}/chat/completions`,
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    apiKeyName: 'DEEPSEEK_API_KEY',
+    model,
+    defaultModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+    systemPrompt,
+    userPrompt,
+  })
+}
+
+// Anthropic Messages API (different shape: x-api-key header, top-level system).
+async function callClaude({ model, systemPrompt, userPrompt }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return { ok: false, status: 500, code: 'MISSING_ANTHROPIC_API_KEY', message: 'ANTHROPIC_API_KEY is missing from .env.local' }
+  }
+  const selectedModel = model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
+  const base = (process.env.ANTHROPIC_API_BASE || 'https://api.anthropic.com').replace(/\/$/, '')
+  const response = await fetch(`${base}/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': process.env.ANTHROPIC_VERSION || '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: selectedModel,
+      max_tokens: 520,
+      temperature: 0.45,
+      system: avatarMotionSystemPrompt(systemPrompt),
+      messages: [{ role: 'user', content: userPrompt || 'Hello' }],
+    }),
+  })
+  const bodyText = await response.text()
+  if (!response.ok) {
+    return { ok: false, status: response.status, ...classifyOpenAICompatibleError('CLAUDE', response.status, bodyText) }
+  }
+  const parsed = JSON.parse(bodyText)
+  const rawText = Array.isArray(parsed?.content) ? parsed.content.map((part) => part?.text || '').join('').trim() : ''
+  return buildAvatarResult(rawText, userPrompt, selectedModel, 'Claude returned an empty response.')
+}
+
+// Shared route handler for an LLM generate lane: primary provider -> Hermes
+// fallback -> structured error, mirroring the existing github-models lane.
+async function runGenerateLane(req, res, callerFn, errorCode) {
+  try {
+    const payload = await readJson(req)
+    const result = await callerFn(payload)
+    if (result.ok) return jsonResponse(res, 200, result)
+    const hermesFallback = await callHermesFallback(payload)
+    if (hermesFallback.ok) {
+      return jsonResponse(res, 200, {
+        ok: true,
+        text: hermesFallback.text,
+        motionPlan: null,
+        model: hermesFallback.model,
+        fallbackProvider: 'hermes-openai-codex',
+        providerBlocked: { code: result.code, message: result.message },
+      })
+    }
+    return jsonResponse(res, result.status || 502, {
+      ok: false,
+      code: result.code,
+      message: `${result.message}; Hermes fallback also failed: ${hermesFallback.message}`,
+      fallbackText: fallbackReply(payload.userPrompt),
+    })
+  } catch (error) {
+    return jsonResponse(res, 500, { ok: false, code: errorCode, message: redactSecretText(error.message) })
+  }
+}
+// ---------------------------------------------------------------------------
 
 function ensureArtifactsDir() {
   fs.mkdirSync(ARTIFACTS_DIR, { recursive: true })
@@ -646,7 +921,7 @@ async function callGemini({ model, systemPrompt, userPrompt }) {
         {
           role: 'user',
           parts: [
-            { text: `${systemPrompt || 'You are an AvatarLink companion.'}\n\nUser: ${userPrompt || 'Hello'}` },
+            { text: `${avatarMotionSystemPrompt(systemPrompt)}\n\nUser: ${userPrompt || 'Hello'}` },
           ],
         },
       ],
@@ -657,9 +932,18 @@ async function callGemini({ model, systemPrompt, userPrompt }) {
     return { ok: false, status: response.status, ...classifyGeminiError(response.status, bodyText) }
   }
   const parsed = JSON.parse(bodyText)
-  const text = parsed?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim()
-  return { ok: true, text: text || 'Gemini returned an empty response.', model: selectedModel }
+  const rawText = parsed?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim()
+  return buildAvatarResult(rawText, userPrompt, selectedModel, 'Gemini returned an empty response.')
 }
+
+// Direct provider LLM lanes (motion + voice). Each exposes /api/<path>/health
+// and POST /api/<path>/generate, all returning the shared avatar motion result.
+const LLM_LANES = [
+  { path: 'gpt', code: 'GPT', caller: callGpt, keyEnv: 'OPENAI_API_KEY', modelEnv: 'OPENAI_CHAT_MODEL', defaultModel: 'gpt-4o-mini' },
+  { path: 'qwen', code: 'QWEN', caller: callQwen, keyEnv: 'QWEN_API_KEY', altKeyEnv: 'DASHSCOPE_API_KEY', modelEnv: 'QWEN_MODEL', defaultModel: 'qwen-plus' },
+  { path: 'deepseek', code: 'DEEPSEEK', caller: callDeepseek, keyEnv: 'DEEPSEEK_API_KEY', modelEnv: 'DEEPSEEK_MODEL', defaultModel: 'deepseek-chat' },
+  { path: 'claude', code: 'CLAUDE', caller: callClaude, keyEnv: 'ANTHROPIC_API_KEY', modelEnv: 'ANTHROPIC_MODEL', defaultModel: 'claude-sonnet-4-6' },
+]
 
 const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url || '/', 'http://127.0.0.1')
@@ -669,7 +953,7 @@ const server = http.createServer(async (req, res) => {
     return jsonResponse(res, 200, { ok: true, provider: 'gemini', hasKey: Boolean(process.env.GEMINI_API_KEY), keyExposed: false })
   }
   if (routePath === '/api/github-models/health') {
-    return jsonResponse(res, 200, { ok: true, provider: 'github-models', hasKey: Boolean(process.env.GITHUB_TOKEN), keyExposed: false, model: process.env.GITHUB_MODELS_MODEL || 'openai/gpt-4.1-mini' })
+    return jsonResponse(res, 200, { ok: true, provider: 'github-models', hasKey: Boolean(oauthAccessToken() || process.env.GITHUB_TOKEN), keyExposed: false, model: process.env.GITHUB_MODELS_MODEL || 'openai/gpt-4.1-mini', oauth: oauthStatus() })
   }
   if (routePath === '/api/github-models/generate' && req.method !== 'POST') {
     return jsonResponse(res, 405, { ok: false, code: 'GITHUB_MODELS_METHOD_NOT_ALLOWED', message: 'Use POST /api/github-models/generate with a JSON body. On a static host, set VITE_GITHUB_MODELS_PROXY_BASE or pass githubModelsProxyBase in the URL query so the browser posts to the running safe proxy, not GitHub Pages.' })
@@ -772,6 +1056,61 @@ const server = http.createServer(async (req, res) => {
       return jsonResponse(res, 500, { ok: false, provider: 'cartesia', code: 'CARTESIA_PROXY_ERROR', message: redactSecretText(error.message), endpoint: '/api/tts/cartesia' })
     }
   }
+  for (const lane of LLM_LANES) {
+    if (routePath === `/api/${lane.path}/health`) {
+      return jsonResponse(res, 200, { ok: true, provider: lane.path, hasKey: Boolean(process.env[lane.keyEnv] || (lane.altKeyEnv && process.env[lane.altKeyEnv])), keyExposed: false, model: process.env[lane.modelEnv] || lane.defaultModel })
+    }
+    if (routePath === `/api/${lane.path}/generate` && req.method !== 'POST') {
+      return jsonResponse(res, 405, { ok: false, code: `${lane.code}_METHOD_NOT_ALLOWED`, message: `Use POST /api/${lane.path}/generate with a JSON body.` })
+    }
+    if (routePath === `/api/${lane.path}/generate` && req.method === 'POST') {
+      return runGenerateLane(req, res, lane.caller, `${lane.code}_PROXY_ERROR`)
+    }
+  }
+  if (routePath === '/oauth/status') {
+    return jsonResponse(res, 200, { ok: true, ...oauthStatus() })
+  }
+  if (routePath === '/oauth/start') {
+    const missing = oauthMissingConfig()
+    if (missing.length) {
+      return jsonResponse(res, 503, { ok: false, code: 'OAUTH_NOT_CONFIGURED', message: `Provider OAuth is not configured. Set ${missing.join(', ')} in .env.local`, missing })
+    }
+    const state = crypto.randomBytes(16).toString('hex')
+    rememberOauthState(state)
+    const authorize = new URL(OAUTH.authorizeUrl)
+    authorize.searchParams.set('response_type', 'code')
+    authorize.searchParams.set('client_id', OAUTH.clientId)
+    authorize.searchParams.set('redirect_uri', OAUTH.callbackUrl)
+    authorize.searchParams.set('scope', OAUTH.scopes)
+    authorize.searchParams.set('state', state)
+    return redirectResponse(res, authorize.toString())
+  }
+  if (routePath === '/oauth/callback') {
+    const providerError = requestUrl.searchParams.get('error')
+    if (providerError) {
+      return jsonResponse(res, 400, { ok: false, code: 'OAUTH_PROVIDER_ERROR', message: redactSecretText(`${providerError}: ${requestUrl.searchParams.get('error_description') || ''}`).slice(0, 300) })
+    }
+    const code = requestUrl.searchParams.get('code')
+    const state = requestUrl.searchParams.get('state')
+    if (!code) return jsonResponse(res, 400, { ok: false, code: 'OAUTH_MISSING_CODE', message: 'Callback is missing the authorization code' })
+    if (!consumeOauthState(state)) {
+      return jsonResponse(res, 400, { ok: false, code: 'OAUTH_BAD_STATE', message: 'Callback state did not match a pending authorize request' })
+    }
+    try {
+      const result = await exchangeOauthCode(code)
+      if (!result.ok) {
+        return jsonResponse(res, result.status || 502, { ok: false, code: 'OAUTH_EXCHANGE_FAILED', message: result.message })
+      }
+      if (OAUTH.redirectAfter) return redirectResponse(res, OAUTH.redirectAfter)
+      return jsonResponse(res, 200, { ok: true, code: 'OAUTH_CONNECTED', message: 'Provider connected. The avatar LLM lane (motion cues + spoken reply) now uses this session token.', ...oauthStatus() })
+    } catch (error) {
+      return jsonResponse(res, 500, { ok: false, code: 'OAUTH_CALLBACK_ERROR', message: redactSecretText(error.message) })
+    }
+  }
+  if (routePath === '/oauth/disconnect' && req.method === 'POST') {
+    oauthToken = null
+    return jsonResponse(res, 200, { ok: true, code: 'OAUTH_DISCONNECTED' })
+  }
   jsonResponse(res, 404, { ok: false, message: 'Not found' })
 })
 
@@ -788,4 +1127,5 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`AvatarLink safe model proxy listening on http://127.0.0.1:${PORT}`)
   console.log(`Gemini key loaded: ${Boolean(process.env.GEMINI_API_KEY)} (secret not printed)`)
   console.log(`GitHub Models token loaded: ${Boolean(process.env.GITHUB_TOKEN)} (secret not printed)`)
+  console.log(`Provider OAuth configured: ${oauthMissingConfig().length === 0} (routes: /oauth/start, /oauth/callback, /oauth/status)`)
 })

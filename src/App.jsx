@@ -34,6 +34,14 @@ const PROVIDER_PRESETS = {
     transport: 'openai-compatible',
     authNote: 'Use an official OpenRouter API key. For low-cost testing, choose a current :free model from the OpenRouter catalog.',
   },
+  deepseek: {
+    id: 'deepseek',
+    label: 'DeepSeek via safe local proxy',
+    apiBase: 'http://127.0.0.1:8787/api/deepseek',
+    model: 'deepseek-chat',
+    transport: 'local-deepseek-proxy',
+    authNote: 'Use DEEPSEEK_API_KEY only in .env.local through the local/server proxy. The browser never receives the raw key.',
+  },
   githubModels: {
     id: 'githubModels',
     label: 'GitHub Models via local safe proxy',
@@ -57,6 +65,14 @@ const PROVIDER_PRESETS = {
     model: 'llama3.2',
     transport: 'openai-compatible',
     authNote: 'Local dev path. No cloud secret is required if your local Ollama server is already running.',
+  },
+  localRouter: {
+    id: 'localRouter',
+    label: 'Local router / OpenAI-compatible gateway',
+    apiBase: 'http://127.0.0.1:8788/v1',
+    model: 'openai/gpt-4.1-mini',
+    transport: 'openai-compatible',
+    authNote: 'Point this at your own local OpenAI-compatible router/gateway. Add a local API key only if your router requires one.',
   },
   openai: {
     id: 'openai',
@@ -91,12 +107,13 @@ const starterIngest = createLiveTtsIngestState(starterBridge)
 const starterPipeline = buildIngestToVisemePipeline(starterIngest, starterBridge, starterAnalysis)
 const starterContract = buildProviderTtsContract({})
 const starterResponseMap = buildProviderResponseMap(starterContract)
-const SAFE_PROXY_PROVIDERS = new Set(['githubModels', 'gemini'])
+const SAFE_PROXY_PROVIDERS = new Set(['githubModels', 'gemini', 'deepseek'])
 
 
 const INITIAL_PROXY_CONFIG_NOTICES = {
   githubModels: null,
   gemini: null,
+  deepseek: null,
   tts: null,
 }
 
@@ -149,6 +166,15 @@ function resolveGeminiProxyBase() {
     storageKey: 'geminiProxyBase',
     localDefault: PROVIDER_PRESETS.gemini.apiBase,
     publicRoute: '/api/gemini',
+  })
+}
+
+function resolveDeepseekProxyBase() {
+  return resolveSafeProxyBase({
+    envBase: import.meta.env.VITE_DEEPSEEK_PROXY_BASE,
+    storageKey: 'deepseekProxyBase',
+    localDefault: PROVIDER_PRESETS.deepseek.apiBase,
+    publicRoute: '/api/deepseek',
   })
 }
 
@@ -266,6 +292,11 @@ const PROVIDER_ENV_DEFAULTS = {
     apiKey: '',
     model: import.meta.env.VITE_GITHUB_MODELS_MODEL || PROVIDER_PRESETS.githubModels.model,
   },
+  deepseek: {
+    apiBase: resolveDeepseekProxyBase(),
+    apiKey: '',
+    model: import.meta.env.VITE_DEEPSEEK_MODEL || PROVIDER_PRESETS.deepseek.model,
+  },
   gemini: {
     apiBase: resolveGeminiProxyBase(),
     apiKey: '',
@@ -275,6 +306,11 @@ const PROVIDER_ENV_DEFAULTS = {
     apiBase: import.meta.env.VITE_OLLAMA_API_BASE || PROVIDER_PRESETS.ollama.apiBase,
     apiKey: import.meta.env.VITE_OLLAMA_API_KEY || '',
     model: import.meta.env.VITE_OLLAMA_MODEL || PROVIDER_PRESETS.ollama.model,
+  },
+  localRouter: {
+    apiBase: import.meta.env.VITE_LOCAL_ROUTER_API_BASE || PROVIDER_PRESETS.localRouter.apiBase,
+    apiKey: import.meta.env.VITE_LOCAL_ROUTER_API_KEY || '',
+    model: import.meta.env.VITE_LOCAL_ROUTER_MODEL || PROVIDER_PRESETS.localRouter.model,
   },
   openai: {
     apiBase: import.meta.env.VITE_OPENAI_API_BASE || PROVIDER_PRESETS.openai.apiBase,
@@ -298,6 +334,9 @@ function buildProviderSelectedStatus(providerId, label, hasLocalKey) {
   }
   if (providerId === 'githubModels') {
     return `Safe proxy selected: ${label}. Real calls use the same-origin or tunnel-forwarded safe proxy when this app opens from a public URL, and the localhost proxy when it opens on the Mac, so GITHUB_TOKEN stays out of the browser bundle.`
+  }
+  if (providerId === 'deepseek') {
+    return `Safe proxy selected: ${label}. Real calls use the same-origin or tunnel-forwarded safe proxy when this app opens from a public URL, and the localhost proxy when it opens on the Mac, so DEEPSEEK_API_KEY stays out of the browser bundle.`
   }
   if (providerId === 'gemini') {
     return `Safe proxy selected: ${label}. Real calls use the same-origin or tunnel-forwarded safe proxy when this app opens from a public URL, and the localhost proxy when it opens on the Mac, so the API key stays out of the browser bundle.`
@@ -347,8 +386,8 @@ async function requestCompanionResponse({
     }
   }
 
-  if (modelProvider === 'githubModels' || modelProvider === 'gemini') {
-    const proxyLabel = modelProvider === 'githubModels' ? 'GitHub Models' : 'Gemini'
+  if (modelProvider === 'githubModels' || modelProvider === 'gemini' || modelProvider === 'deepseek') {
+    const proxyLabel = modelProvider === 'githubModels' ? 'GitHub Models' : modelProvider === 'gemini' ? 'Gemini' : 'DeepSeek'
     const validatedProxy = validateProxyBase(apiBase)
     if (!validatedProxy.ok) {
       const blockedFailure = classifyLiveProxyFailure(`Failed to parse URL: ${validatedProxy.reason}`)

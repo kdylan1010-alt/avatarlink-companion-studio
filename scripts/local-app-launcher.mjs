@@ -11,18 +11,20 @@ const __filename = fileURLToPath(import.meta.url)
 const appRoot = path.resolve(path.dirname(__filename), '..')
 const distDir = path.join(appRoot, 'dist')
 const publicDir = path.join(appRoot, 'public')
-const artifactsDir = path.join(appRoot, 'artifacts')
+const userDataDir = path.join(os.homedir(), 'Library', 'Application Support', 'AvatarLink Companion Studio')
+const artifactsDir = path.join(userDataDir, 'artifacts')
 const logsDir = path.join(os.homedir(), 'Library', 'Logs', 'AvatarLink Companion Studio')
 const logPath = path.join(logsDir, 'launcher.log')
 const repoSubpath = '/avatarlink-companion-studio'
 const proxyPort = Number(process.env.AVATARLINK_PROXY_PORT || 8787)
 const preferredAppPorts = [8008, 4173, 0]
 const host = '127.0.0.1'
-const projectEnvFallback = '/Users/a1111/Desktop/avatarlink-companion-studio/.env.local'
 const packageEnvPath = path.join(appRoot, '.env.local')
+const appSupportEnvPath = path.join(userDataDir, '.env.local')
 const bundledNode = path.join(appRoot, 'bin', 'node')
 const nodeExec = fs.existsSync(bundledNode) ? bundledNode : process.execPath
 
+fs.mkdirSync(userDataDir, { recursive: true })
 fs.mkdirSync(artifactsDir, { recursive: true })
 fs.mkdirSync(logsDir, { recursive: true })
 
@@ -77,15 +79,10 @@ function canAccess(filePath) {
   }
 }
 
-function ensureEnvFallback() {
-  if (canAccess(packageEnvPath) || !canAccess(projectEnvFallback)) return
-  try {
-    fs.copyFileSync(projectEnvFallback, packageEnvPath)
-    fs.chmodSync(packageEnvPath, 0o600)
-    log(`Copied local .env.local fallback from ${projectEnvFallback}`)
-  } catch (error) {
-    log(`Could not copy fallback .env.local: ${error.message}`)
-  }
+function resolveEnvPath() {
+  if (canAccess(packageEnvPath)) return packageEnvPath
+  if (canAccess(appSupportEnvPath)) return appSupportEnvPath
+  return ''
 }
 
 function checkProxyHealth() {
@@ -108,11 +105,22 @@ async function ensureProxy() {
     }
   } catch {}
 
-  ensureEnvFallback()
+  const envPath = resolveEnvPath()
+  if (envPath) {
+    log(`Using provider env file at ${envPath}`)
+  } else {
+    log(`No provider env file found. Expected ${packageEnvPath} or ${appSupportEnvPath}`)
+  }
   const proc = spawn(nodeExec, [path.join(appRoot, 'scripts', 'gemini-proxy.mjs')], {
     cwd: appRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PATH: `/usr/local/bin:${process.env.PATH || ''}` },
+    env: {
+      ...process.env,
+      PATH: `/usr/local/bin:${process.env.PATH || ''}`,
+      AVATARLINK_ENV_PATH: envPath,
+      AVATARLINK_USER_DATA_DIR: userDataDir,
+      AVATARLINK_ARTIFACTS_DIR: path.join(artifactsDir, 'tts'),
+    },
   })
   proc.stdout.on('data', (chunk) => log(`[proxy stdout] ${String(chunk).trim()}`))
   proc.stderr.on('data', (chunk) => log(`[proxy stderr] ${String(chunk).trim()}`))

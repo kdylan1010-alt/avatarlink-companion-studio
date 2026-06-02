@@ -60,4 +60,15 @@ Secrets are not bundled into the DMG intentionally.
 For this Mac, the launcher can reuse the existing project `.env.local` as a fallback if it exists at:
 - `/Users/a1111/Desktop/avatarlink-companion-studio/.env.local`
 
-For another Mac, live provider access requires a local `.env.local` to be added by the operator.
+For another Mac, live provider access requires a local `.env.local` added by the operator at:
+- `~/Library/Application Support/AvatarLink Companion Studio/.env.local`
+
+Recommended setup flow on a new Mac:
+1. Open `AvatarLink Companion Studio.app/Contents/Resources/app/.env.example`
+2. Copy it to `~/Library/Application Support/AvatarLink Companion Studio/.env.local`
+3. Add only the providers you want, for example:
+   - `GITHUB_TOKEN` or `PROVIDER_OAUTH_*` for GitHub Models
+   - `DEEPSEEK_API_KEY` for DeepSeek
+   - `GEMINI_API_KEY` for Gemini
+   - optional direct BYOK / router values such as `VITE_OPENROUTER_API_KEY`, `VITE_LOCAL_ROUTER_API_BASE`, `VITE_LOCAL_ROUTER_API_KEY`, `VITE_OLLAMA_API_BASE`, `VITE_OPENAI_API_KEY`
+4. Relaunch the app so the launcher/proxy picks up the local file.

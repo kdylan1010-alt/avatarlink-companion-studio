@@ -18,7 +18,26 @@ AvatarLink uses a **safe BYOK provider abstraction**. It does **not** use ChatGP
   - Choose a current `:free` model from the OpenRouter catalog when available.
   - Good first choice for low-cost browser demos.
 
-### 2) Gemini API key via local/server proxy
+### 2) GitHub Models via local safe proxy
+- Browser base URL: `http://127.0.0.1:8787/api/github-models`
+- Server upstream: `https://models.github.ai/inference`
+- Safe path: GitHub Models through the local/server proxy using either `GITHUB_TOKEN` in `.env.local` or the server-side OAuth connector in `scripts/gemini-proxy.mjs`
+- MVP status: **recommended real demo path on this Mac**
+- Notes:
+  - The browser only talks to the safe proxy; `GITHUB_TOKEN`, OAuth client secret, and OAuth access token stay server-side.
+  - `GET /api/github-models/health` reports `oauth: { configured, connected, scope, expiresInSec }` without exposing the token.
+  - This is the lane the packaged app reuses by default when the local proxy on `:8787` is already running.
+
+### 3) DeepSeek via local safe proxy
+- Browser base URL: `http://127.0.0.1:8787/api/deepseek`
+- Server upstream: `https://api.deepseek.com/v1/chat/completions`
+- Safe path: BYOK `DEEPSEEK_API_KEY` stored only in `.env.local` and used server-side by `scripts/gemini-proxy.mjs`
+- MVP status: **wired through the shared safe proxy and packaged UI**
+- Notes:
+  - The browser never receives the raw DeepSeek key.
+  - This lane shares the same strict motion+voice JSON contract as GPT/Qwen/Claude/Gemini/GitHub Models.
+
+### 4) Gemini API key via local/server proxy
 - Browser base URL: `http://127.0.0.1:8787/api/gemini`
 - Server upstream: `https://generativelanguage.googleapis.com/v1beta`
 - Safe path: BYOK Gemini API key from Google AI Studio stored only in `.env.local` as `GEMINI_API_KEY`
@@ -28,7 +47,15 @@ AvatarLink uses a **safe BYOK provider abstraction**. It does **not** use ChatGP
   - The current saved key is recognized by `models.list`, but `generateContent` is blocked by Google project/quota errors, so the UI keeps the full avatar chain moving with fallback text.
   - A fresh Google project/key with Generate Content quota/billing or support access should work without changing the AvatarLink UI.
 
-### 3) Local Ollama (dev/local)
+### 5) OpenRouter (OpenAI-compatible, supports `:free` models)
+- Base URL: `https://openrouter.ai/api/v1`
+- Safe path: BYOK OpenRouter API key entered by the operator
+- MVP status: **ready to test safely in the current UI and packaged app**
+- Notes:
+  - OpenRouter is direct browser BYOK here, not proxied through `:8787`.
+  - Choose a current `:free` model when available for low-cost demos.
+
+### 6) Local Ollama (dev/local)
 - Base URL: `http://localhost:11434/v1`
 - Safe path: local-only connector for development
 - MVP status: **ready to test safely if Ollama is running locally**
@@ -36,7 +63,15 @@ AvatarLink uses a **safe BYOK provider abstraction**. It does **not** use ChatGP
   - No cloud secret is required.
   - Useful for local debugging and no-cost dev loops.
 
-### 4) Official OpenAI API key / project
+### 7) Local router / OpenAI-compatible gateway
+- Base URL: `http://127.0.0.1:8788/v1`
+- Safe path: operator-managed local gateway; optional `VITE_LOCAL_ROUTER_API_KEY` only if that router requires auth
+- MVP status: **wired in the packaged UI as a configurable advanced path**
+- Notes:
+  - Useful for LiteLLM, custom routers, or local OpenAI-compatible gateways.
+  - This route is intentionally operator-configurable rather than hard-wired to the `:8787` safe proxy.
+
+### 8) Official OpenAI API key / project
 - Base URL: `https://api.openai.com/v1`
 - Safe path: official OpenAI API key/project only
 - MVP status: **ready to test safely in the current UI**
@@ -57,11 +92,26 @@ AvatarLink uses a **safe BYOK provider abstraction**. It does **not** use ChatGP
   - callback URL confirmed
   - env vars wired on a server-side or secure runtime path
 
+## Packaged-app key setup
+The DMG bundles `.env.example` plus docs only — **never `.env.local`**.
+
+On a new Mac, after dragging the app into `/Applications`:
+1. Copy `.env.example` from `AvatarLink Companion Studio.app/Contents/Resources/app/` to:
+   - `~/Library/Application Support/AvatarLink Companion Studio/.env.local`
+2. Fill only the keys/routes you actually want to use:
+   - `GITHUB_TOKEN` for GitHub Models, or `PROVIDER_OAUTH_*` for server-side OAuth
+   - `DEEPSEEK_API_KEY` for DeepSeek safe-proxy use
+   - `GEMINI_API_KEY` for Gemini safe-proxy use
+   - optional direct BYOK / router values such as `VITE_OPENROUTER_API_KEY`, `VITE_LOCAL_ROUTER_API_BASE`, `VITE_LOCAL_ROUTER_API_KEY`, `VITE_OLLAMA_API_BASE`, `VITE_OPENAI_API_KEY`
+3. Relaunch the app so the launcher/proxy picks up the local env file.
+
 ## Env placeholders
 See `.env.example` for placeholder values only:
 - `VITE_OPENROUTER_API_BASE`
+- `VITE_DEEPSEEK_PROXY_BASE`
 - `VITE_GEMINI_PROXY_BASE`
 - `VITE_OLLAMA_API_BASE`
+- `VITE_LOCAL_ROUTER_API_BASE`
 - `VITE_OPENAI_API_BASE`
 - `VITE_PROVIDER_OAUTH_CALLBACK_URL`
 - `VITE_PROVIDER_OAUTH_CLIENT_ID`
